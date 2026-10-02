@@ -1,0 +1,17 @@
+# Development profile overrides
+spring:
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+admin:
+  phone: ${ADMIN_PHONE:01000000000}
+  password: ${ADMIN_PASSWORD:AdminPassword123!}
+
+logging:
+  level:
+    org.serviceproject: INFO
+    org.springframework.security: INFO
+
