@@ -56,6 +56,11 @@ public class AttendanceService {
     @Transactional
     public AttendanceSessionResponse createSession(CreateSessionRequest request, UserPrincipal principal) {
         Week week = weekService.getWeekOrThrow(request.weekId());
+        Week currentWeek = weekService.getCurrentWeekEntity();
+
+        if (principal != null && !principal.isAdmin() && currentWeek != null && !week.getId().equals(currentWeek.getId())) {
+            throw AppException.badRequest("CURRENT_WEEK_ONLY", "يمكن فتح وإنشاء الاجتماعات في الأسبوع الحالي فقط");
+        }
 
         if (weekService.isWeekLockedForUser(week, principal)) {
             throw AppException.forbidden("WEEK_LOCKED", "لا يمكن إنشاء جلسة حضور في أسبوع مقفول");

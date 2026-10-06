@@ -208,6 +208,9 @@ public class UserService {
         person.restore();
         personRepository.save(person);
 
+        account.setEnabled(true);
+        userAccountRepository.save(account);
+
         if (eventPublisher != null) {
             eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.system(
                     org.serviceproject.audit.entity.AuditAction.RESTORE,

@@ -142,7 +142,16 @@ public class StudentService {
 
         if (principal.isServant()) {
             List<StudentPlacement> list;
-            if ("class".equalsIgnoreCase(scope) || "all".equalsIgnoreCase(scope)) {
+            if ("attendance".equalsIgnoreCase(scope) || "ministry".equalsIgnoreCase(scope)) {
+                StaffPlacement servantPlacement = staffPlacementRepository.findByPersonIdAndAcademicYearId(principal.getPersonId(), yearId)
+                        .orElse(null);
+                if (servantPlacement != null && servantPlacement.getMinistry() != null) {
+                    list = studentPlacementRepository.findAllByAcademicYearIdAndMinistryIdAndStatus(
+                            yearId, servantPlacement.getMinistry().getId(), StudentStatus.ACTIVE);
+                } else {
+                    list = List.of();
+                }
+            } else if ("class".equalsIgnoreCase(scope) || "all".equalsIgnoreCase(scope)) {
                 StaffPlacement servantPlacement = staffPlacementRepository.findByPersonIdAndAcademicYearId(principal.getPersonId(), yearId)
                         .orElse(null);
                 if (servantPlacement != null && servantPlacement.getGradeClass() != null) {
@@ -154,6 +163,10 @@ public class StudentService {
             } else {
                 list = studentPlacementRepository.findAllByAcademicYearIdAndServantIdAndStatus(
                         yearId, principal.getPersonId(), StudentStatus.ACTIVE);
+            }
+
+            if (classId != null) {
+                list = list.stream().filter(sp -> sp.getGradeClass() != null && classId.equals(sp.getGradeClass().getId())).toList();
             }
 
             if (search != null && !search.isBlank()) {
@@ -452,6 +465,13 @@ public class StudentService {
         person.restore();
         personRepository.save(person);
 
+        if (userAccountRepository != null) {
+            userAccountRepository.findByPersonId(person.getId()).ifPresent(acc -> {
+                acc.setEnabled(true);
+                userAccountRepository.save(acc);
+            });
+        }
+
         if (eventPublisher != null) {
             eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.system(
                     org.serviceproject.audit.entity.AuditAction.RESTORE,
@@ -480,9 +500,9 @@ public class StudentService {
             if (sp.getResponsibleServant() != null && sp.getResponsibleServant().getId().equals(principal.getPersonId())) {
                 return true;
             }
-            if (sp.getGradeClass() != null && sp.getAcademicYear() != null) {
+            if (sp.getMinistry() != null && sp.getAcademicYear() != null) {
                 return staffPlacementRepository.findByPersonIdAndAcademicYearId(principal.getPersonId(), sp.getAcademicYear().getId())
-                        .map(staff -> staff.getGradeClass() != null && staff.getGradeClass().getId().equals(sp.getGradeClass().getId()))
+                        .map(staff -> staff.getMinistry() != null && staff.getMinistry().getId().equals(sp.getMinistry().getId()))
                         .orElse(false);
             }
             return false;

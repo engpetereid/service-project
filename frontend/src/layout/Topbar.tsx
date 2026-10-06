@@ -5,6 +5,7 @@ import { ROLE_LABELS, getRoleBadgeClass } from '../utils/arabic';
 import { LogOut, Menu, User, Shield, Info } from 'lucide-react';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs';
 import { NotificationDropdown } from '../components/layout/NotificationDropdown';
+import waznaLogo from '../assets/waznaLogo.png';
 
 interface TopbarProps {
   onToggleSidebar: () => void;
@@ -32,9 +33,14 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleSidebar }) => {
           <div className="hidden sm:block">
             <Breadcrumbs />
           </div>
-          <div className="sm:hidden font-bold text-gray-900 text-sm truncate">
-            {user?.fullName || 'وزنة'}
-          </div>
+          <Link to="/" className="sm:hidden flex items-center gap-2">
+            <img
+              src={waznaLogo}
+              alt="وزنة"
+              className="w-8 h-8 rounded-xl object-cover shadow-xs border border-gray-100 shrink-0"
+            />
+            <span className="font-black text-gray-900 text-sm">وزنة</span>
+          </Link>
         </div>
       </div>
 
@@ -86,12 +92,21 @@ export const Topbar: React.FC<TopbarProps> = ({ onToggleSidebar }) => {
               />
               <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95">
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-sm font-bold text-gray-900 truncate">
-                    {user?.fullName}
-                  </p>
-                  <p className="text-xs text-gray-400 font-mono mt-0.5" dir="ltr">
-                    {user?.phone}
-                  </p>
+                  <div className="flex items-center gap-3 mb-2">
+                    <img
+                      src={waznaLogo}
+                      alt="وزنة"
+                      className="w-9 h-9 rounded-xl object-cover shadow-xs border border-gray-100 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gray-900 truncate">
+                        {user?.fullName}
+                      </p>
+                      <p className="text-xs text-gray-400 font-mono mt-0.5" dir="ltr">
+                        {user?.phone}
+                      </p>
+                    </div>
+                  </div>
 
                   {/* All Roles */}
                   <div className="mt-2.5 pt-2 border-t border-gray-50 flex flex-wrap gap-1">

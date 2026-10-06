@@ -3,8 +3,13 @@ import { NotificationResponse, UnreadCountResponse } from '../types/notification
 
 export const notificationsApi = {
   findAll: async (): Promise<NotificationResponse[]> => {
-    const res = await apiClient.get<NotificationResponse[]>('/notifications');
-    return res.data;
+    const res = await apiClient.get<any>('/notifications', {
+      params: { size: 100 },
+    });
+    if (res.data && Array.isArray(res.data.content)) {
+      return res.data.content;
+    }
+    return Array.isArray(res.data) ? res.data : [];
   },
 
   getUnreadCount: async (): Promise<UnreadCountResponse> => {

@@ -171,6 +171,21 @@ class AttendanceServiceTest {
     }
 
     @Test
+    void createSession_notCurrentWeek_nonAdmin_throwsBadRequest() {
+        CreateSessionRequest request = new CreateSessionRequest(10L, ActivityType.MASS, LocalDate.of(2026, 9, 6));
+
+        Week otherWeek = new Week(LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 17));
+        otherWeek.setId(11L);
+
+        when(weekService.getWeekOrThrow(10L)).thenReturn(week);
+        when(weekService.getCurrentWeekEntity()).thenReturn(otherWeek);
+
+        AppException ex = assertThrows(AppException.class, () -> attendanceService.createSession(request, servantPrincipal));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("CURRENT_WEEK_ONLY", ex.getCode());
+    }
+
+    @Test
     void toggleAttendance_scopeException_servantCanRecordForAnyActiveStudent() {
         // Explicit architectural requirement: Any servant can record attendance for any active student
         ToggleAttendanceRequest request = new ToggleAttendanceRequest(100L, 5001L, true);

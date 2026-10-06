@@ -1,0 +1,74 @@
+{
+  "name": "وزنة | نظام خدمة ومتابعة الكنيسة",
+  "short_name": "وزنة",
+  "description": "نظام خدمة وافتقاد ومتابعة الكنيسة الأسبوعي",
+  "start_url": "/",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#026fc4",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["utilities", "productivity", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "الافتقاد الأسبوعي",
+      "short_name": "الافتقاد",
+      "description": "تسجيل ومتابعة الافتقاد",
+      "url": "/visits",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "تسجيل الحضور",
+      "short_name": "الحضور",
+      "description": "تسجيل حضور الأنشطة والقداسات",
+      "url": "/attendance",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "متابعتي الأسبوعية",
+      "short_name": "متابعتي",
+      "description": "متابعة الخادم الأسبوعية",
+      "url": "/self-followup",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}\n

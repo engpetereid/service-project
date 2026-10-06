@@ -17,6 +17,7 @@ import {
   ExternalLink,
   MessageCircle,
 } from 'lucide-react';
+import waznaLogo from '../assets/waznaLogo.png';
 
 const GithubIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -51,9 +52,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ isPublic = false }) => {
         <div className="bg-white border-b border-gray-100 py-3 px-4 sm:px-8 mb-6 -mx-4 sm:-mx-6 lg:-mx-8">
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-600 to-primary-800 text-white flex items-center justify-center font-black text-base shadow-sm">
-                ✝
-              </div>
+              <img
+                src={waznaLogo}
+                alt="وزنة"
+                className="w-10 h-10 rounded-xl object-cover shadow-sm border border-gray-100 shrink-0"
+              />
               <div>
                 <span className="font-black text-gray-900 text-lg leading-none">وزنة</span>
                 <span className="text-[10px] text-gray-400 block font-medium">نظام خدمة الكنيسة</span>
@@ -75,28 +78,28 @@ export const AboutPage: React.FC<AboutPageProps> = ({ isPublic = false }) => {
         <div className="absolute top-0 left-0 w-96 h-96 bg-primary-600/10 rounded-full blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none translate-x-1/3 translate-y-1/3" />
 
-        <div className="relative z-10 max-w-3xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-bold text-primary-200 border border-white/10">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>برنامج وزنة • Wazna Church Management System</span>
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="max-w-2xl space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-bold text-primary-200 border border-white/10">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>برنامج وزنة • Wazna Church Management System</span>
+            </div>
+
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
+              نظام <span className="text-amber-300">وزنة</span> لإدارة وخدمة ومتابعة الكنيسة
+            </h1>
+
+            <p className="text-sm sm:text-base text-primary-100/90 leading-relaxed max-w-2xl font-medium">
+              منظومة رقمية متكاملة صُممت لتمكين الخدام وأمناء الخدمة من أداء رسالتهم الكنسية بأعلى درجات الأمانة والتنظيم، ومتابعة نمو المخدومين وافتقادهم الأسبوعي.
+            </p>
           </div>
 
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
-            نظام <span className="text-amber-300">وزنة</span> لإدارة وخدمة ومتابعة الكنيسة
-          </h1>
-
-          <p className="text-sm sm:text-base text-primary-100/90 leading-relaxed max-w-2xl font-medium">
-            منظومة رقمية متكاملة صُممت لتمكين الخدام وأمناء الخدمة من أداء رسالتهم الكنسية بأعلى درجات الأمانة والتنظيم، ومتابعة نمو المخدومين وافتقادهم الأسبوعي.
-          </p>
-
-          {/* Spiritual Verse */}
-          <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-white/95 mt-4">
-            <p className="text-sm sm:text-base font-bold italic tracking-wide text-amber-200 leading-relaxed text-center sm:text-right">
-              «نِعِمَّا أَيُّهَا الْعَبْدُ الصَّالِحُ وَالأَمِينُ! كُنْتَ أَمِينًا فِي الْقَلِيلِ فَأُقِيمُكَ عَلَى الْكَثِيرِ. اُدْخُلْ إِلَى فَرَحِ سَيِّدِكَ»
-            </p>
-            <span className="block text-xs text-primary-200 font-medium text-center sm:text-left mt-1">
-              (إنجيل متى 25: 21)
-            </span>
+          <div className="shrink-0 hidden md:block">
+            <img
+              src={waznaLogo}
+              alt="شعار وزنة"
+              className="w-28 h-28 rounded-3xl object-cover shadow-2xl border-2 border-white/20 ring-4 ring-white/10"
+            />
           </div>
         </div>
       </div>

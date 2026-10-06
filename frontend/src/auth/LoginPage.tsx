@@ -5,6 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Alert } from '../components/ui/Alert';
 import { Phone, Eye, EyeOff } from 'lucide-react';
+import waznaLogo from '../assets/waznaLogo.png';
 
 export const LoginPage: React.FC = () => {
   const [phone, setPhone] = useState('');
@@ -50,21 +51,11 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md">
         {/* Header / Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary-600 text-white shadow-lg shadow-primary-500/20 mb-4">
-            <svg
-              className="w-9 h-9"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 2v20m-7-13h14"
-              />
-            </svg>
-          </div>
+          <img
+            src={waznaLogo}
+            alt="شعار وزنة"
+            className="w-20 h-20 rounded-3xl object-cover shadow-xl shadow-primary-500/20 mb-4 border-2 border-white ring-4 ring-primary-50 mx-auto"
+          />
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">
             وزنة
           </h1>

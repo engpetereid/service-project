@@ -46,7 +46,8 @@ export const ArchivePage: React.FC = () => {
   // Restore person mutation
   const restoreMutation = useMutation({
     mutationFn: async (person: DeletedPersonItem) => {
-      if (person.personType === 'SERVANT') {
+      const isServant = person.personType === 'SERVANT' || person.personType === 'خادم';
+      if (isServant) {
         await archiveApi.restoreServant(person.id);
       } else {
         await archiveApi.restoreStudent(person.id);
@@ -204,8 +205,8 @@ export const ArchivePage: React.FC = () => {
                     <tr key={person.id} className="hover:bg-gray-50/50 transition">
                       <td className="py-3 px-3 font-bold text-gray-900">{person.fullName}</td>
                       <td className="py-3 px-3">
-                        <Badge variant={person.personType === 'SERVANT' ? 'primary' : 'neutral'}>
-                          {person.personType === 'SERVANT' ? 'خادم' : 'مخدوم'}
+                        <Badge variant={person.personType === 'SERVANT' || person.personType === 'خادم' ? 'primary' : 'neutral'}>
+                          {person.personType === 'SERVANT' || person.personType === 'خادم' ? 'خادم' : 'مخدوم'}
                         </Badge>
                       </td>
                       <td className="py-3 px-3 font-mono text-gray-500" dir="ltr">

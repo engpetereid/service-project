@@ -10,7 +10,6 @@ import { ActivityType, AttendanceSessionResponse } from '../types/attendance.typ
 import { WeekResponse } from '../types/visit.types';
 import { StudentResponse } from '../types/student.types';
 import { AttendanceToggleCard } from '../components/attendance/AttendanceToggleCard';
-import { WeekTimelineBanner } from '../components/attendance/WeekTimelineBanner';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -32,8 +31,6 @@ import {
   Calendar,
   CheckCircle2,
   XCircle,
-  CheckCheck,
-  Ban,
   Lock,
   ArrowRight,
 } from 'lucide-react';
@@ -42,56 +39,46 @@ type PresenceFilter = 'ALL' | 'PRESENT' | 'ABSENT';
 
 export const AttendancePage: React.FC = () => {
   const queryClient = useQueryClient();
-  const { isAdmin, isServiceSecretary, isClassSecretary, managedMinistryId, managedClassId } = usePermissions();
+  const { isAdmin, isServiceSecretary, isClassSecretary, managedMinistryId } = usePermissions();
   const isSecretaryOrAdmin = isAdmin || isServiceSecretary || isClassSecretary;
 
   const todayStr = new Date().toISOString().split('T')[0];
 
   const [activeActivity, setActiveActivity] = useState<ActivityType>('MASS');
-  const [selectedWeek, setSelectedWeek] = useState<WeekResponse | null>(null);
 
   // Filters
   const [nameSearch, setNameSearch] = useState('');
   const debouncedNameSearch = useDebounce(nameSearch, 250);
-  const [selectedClassId, setSelectedClassId] = useState<number | ''>(managedClassId || '');
+  const [selectedClassId, setSelectedClassId] = useState<number | ''>('');
   const [selectedServantId, setSelectedServantId] = useState<number | ''>('');
   const [presenceFilter, setPresenceFilter] = useState<PresenceFilter>('ALL');
 
   // Session state
-  const [sessionDate, setSessionDate] = useState<string>(todayStr);
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
-  const [batchActionLoading, setBatchActionLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 1. Fetch current week
-  const { data: currentWeek } = useQuery<WeekResponse>({
+  // 1. Fetch current week only (attendance is strictly for the current week)
+  const { data: currentWeek, isLoading: isWeekLoading } = useQuery<WeekResponse>({
     queryKey: ['weeks', 'current'],
     queryFn: weeksApi.getCurrentWeek,
   });
 
-  // 2. Fetch all weeks
-  const { data: allWeeks = [] } = useQuery<WeekResponse[]>({
-    queryKey: ['weeks', 'all'],
-    queryFn: () => weeksApi.getAll(false),
-  });
+  const selectedWeek = currentWeek || null;
 
-  // Initialize selectedWeek to currentWeek if not set
-  useEffect(() => {
-    if (!selectedWeek && currentWeek) {
-      setSelectedWeek(currentWeek);
-      setSessionDate(currentWeek.startDate);
+  // Session date locked to today or week start
+  const sessionDate = useMemo(() => {
+    if (selectedWeek && todayStr >= selectedWeek.startDate && todayStr <= selectedWeek.endDate) {
+      return todayStr;
     }
-  }, [currentWeek, selectedWeek]);
+    return selectedWeek?.startDate || todayStr;
+  }, [selectedWeek, todayStr]);
 
-  // When selectedWeek changes, update default sessionDate to week startDate
+  // Reset selectedSessionId when activity changes
   useEffect(() => {
-    if (selectedWeek) {
-      setSessionDate(selectedWeek.startDate);
-      setSelectedSessionId(null);
-    }
-  }, [selectedWeek]);
+    setSelectedSessionId(null);
+  }, [activeActivity]);
 
-  // 3. Fetch attendance sessions for selected week
+  // 2. Fetch attendance sessions for current week
   const { data: weekSessions = [], isLoading: isSessionsLoading } = useQuery<AttendanceSessionResponse[]>({
     queryKey: ['attendance', 'sessions', selectedWeek?.id],
     queryFn: () => attendanceApi.getSessionsByWeek(selectedWeek!.id),
@@ -111,26 +98,36 @@ export const AttendancePage: React.FC = () => {
     return matchingSessions[0] || null;
   }, [matchingSessions, selectedSessionId]);
 
-  // 4. Fetch session details (with attendance records)
+  // 3. Fetch session details (with attendance records)
   const { data: sessionDetails, refetch: refetchDetails } = useQuery({
     queryKey: ['attendance', 'session-details', currentSession?.id],
     queryFn: () => attendanceApi.getSessionDetails(currentSession!.id),
     enabled: !!currentSession?.id,
   });
 
-  // 5. Fetch all active students
+  // 4. Fetch students roster (with scope='attendance' so servants can see all students in their ministry)
   const { data: allStudents = [], isLoading: isStudentsLoading } = useQuery<StudentResponse[]>({
     queryKey: ['students', 'attendance-roster'],
-    queryFn: () => studentsApi.findAll(),
+    queryFn: () => studentsApi.findAll({ scope: 'attendance' }),
   });
 
-  // 6. Fetch classes for filter
+  // 5. Fetch classes for filter
   const { data: allClasses = [] } = useQuery({
     queryKey: ['classes', 'all'],
     queryFn: () => classesApi.findAll(managedMinistryId || undefined),
   });
 
-  // 7. Fetch servants for filter
+  // Available classes derived from roster students if not admin
+  const availableClasses = useMemo(() => {
+    if (isAdmin) return allClasses;
+    if (allStudents.length > 0) {
+      const studentClassIds = new Set(allStudents.map((s) => s.classId));
+      return allClasses.filter((c) => studentClassIds.has(c.id));
+    }
+    return allClasses;
+  }, [allClasses, allStudents, isAdmin]);
+
+  // 6. Fetch servants for filter
   const { data: servants = [] } = useQuery({
     queryKey: ['servants', selectedClassId],
     queryFn: () => servantsApi.findAll({ classId: selectedClassId ? Number(selectedClassId) : undefined }),
@@ -247,29 +244,6 @@ export const AttendancePage: React.FC = () => {
     toggleMutation.mutate({ studentId, present: newPresent });
   };
 
-  // Bulk actions
-  const handleBulkMark = async (present: boolean) => {
-    if (!currentSession || isLockedForUser || roster.length === 0) return;
-    try {
-      setBatchActionLoading(true);
-      setErrorMessage(null);
-      const studentIds = roster.map((r) => r.student.id);
-
-      await attendanceApi.batchToggleAttendance({
-        sessionId: currentSession.id,
-        studentIds,
-        present,
-      });
-
-      await refetchDetails();
-      queryClient.invalidateQueries({ queryKey: ['attendance', 'sessions'] });
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'فشل تسجيل الحضور الجماعي');
-    } finally {
-      setBatchActionLoading(false);
-    }
-  };
-
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header */}
@@ -292,14 +266,33 @@ export const AttendancePage: React.FC = () => {
         </Link>
       </div>
 
-      {/* Week Timeline & Navigation Banner */}
-      <WeekTimelineBanner
-        currentWeek={currentWeek || null}
-        selectedWeek={selectedWeek}
-        allWeeks={allWeeks}
-        onSelectWeek={(w) => setSelectedWeek(w)}
-        isAdmin={isAdmin}
-      />
+      {/* Current Week Banner (Attendance is locked to current week only) */}
+      {currentWeek ? (
+        <div className="bg-gradient-to-r from-primary-50/80 via-white to-primary-50/40 rounded-2xl border border-primary-200/80 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary-600 text-white flex items-center justify-center font-mono font-bold text-sm shadow-sm shrink-0">
+              #{currentWeek.id}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-gray-900">الأسبوع الحالي</span>
+                <Badge variant="success" className="text-[10px]">مفتوح للتسجيل</Badge>
+              </div>
+              <span className="text-xs text-gray-500 font-mono">
+                من الجمعة {currentWeek.startDate} إلى الخميس {currentWeek.endDate}
+              </span>
+            </div>
+          </div>
+          <div className="text-[11px] text-primary-800 bg-primary-100/60 px-3 py-1.5 rounded-xl border border-primary-200 font-medium self-start sm:self-auto">
+            يتم تسجيل جلسات الحضور للأسبوع الجاري فقط
+          </div>
+        </div>
+      ) : isWeekLoading ? (
+        <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-2 text-xs text-gray-500">
+          <Spinner size="sm" />
+          <span>جاري تحميل بيانات الأسبوع الحالي...</span>
+        </div>
+      ) : null}
 
       {/* Error Banner */}
       {errorMessage && (
@@ -421,12 +414,6 @@ export const AttendancePage: React.FC = () => {
         {/* Create new session inline (if not locked) */}
         {!isLockedForUser && (
           <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
-            <Input
-              type="date"
-              value={sessionDate}
-              onChange={(e) => setSessionDate(e.target.value)}
-              className="w-36 py-1.5 text-xs font-mono"
-            />
             <Button
               variant="primary"
               size="sm"
@@ -435,7 +422,7 @@ export const AttendancePage: React.FC = () => {
               className="font-bold whitespace-nowrap text-xs shadow-sm"
             >
               <Plus className="w-3.5 h-3.5 ml-1" />
-              إنشاء جلسة
+              إنشاء جلسة اليوم ({formatDate(sessionDate)})
             </Button>
           </div>
         )}
@@ -451,7 +438,7 @@ export const AttendancePage: React.FC = () => {
             لا توجد جلسة حضور مختارة لهذا الأسبوع
           </h3>
           <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
-            قم باختيار تاريخ الجلسة واضغط «إنشاء جلسة» للبدء بتسجيل الحضور الفوري لمخدومي الكنيسة.
+            اضغط «إنشاء جلسة» للبدء بتسجيل الحضور الفوري لمخدومي الكنيسة في هذا الأسبوع.
           </p>
           {!isLockedForUser && (
             <Button
@@ -461,7 +448,7 @@ export const AttendancePage: React.FC = () => {
               className="font-bold text-xs shadow-sm"
             >
               <Plus className="w-4 h-4 ml-1.5" />
-              إنشاء جلسة بتاريخ {formatDate(sessionDate)}
+              إنشاء جلسة للأسبوع الحالي ({formatDate(sessionDate)})
             </Button>
           )}
         </Card>
@@ -532,7 +519,7 @@ export const AttendancePage: React.FC = () => {
                     setSelectedClassId(e.target.value ? Number(e.target.value) : '');
                     setSelectedServantId('');
                   }}
-                  options={allClasses.map((c) => ({
+                  options={availableClasses.map((c) => ({
                     value: c.id,
                     label: `${c.ministryName} — ${c.name}`,
                   }))}
@@ -557,7 +544,7 @@ export const AttendancePage: React.FC = () => {
               )}
             </div>
 
-            {/* Quick Filter Tabs & Bulk Action Buttons */}
+            {/* Quick Filter Tabs */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-100">
               {/* Presence filter tabs */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
@@ -599,33 +586,6 @@ export const AttendancePage: React.FC = () => {
                   <span>الغائبون ({absentCount})</span>
                 </button>
               </div>
-
-              {/* Bulk Actions for Filtered Students */}
-              {!isLockedForUser && roster.length > 0 && (
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleBulkMark(true)}
-                    disabled={batchActionLoading}
-                    className="text-xs font-bold text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                  >
-                    <CheckCheck className="w-3.5 h-3.5 ml-1" />
-                    تسجيل الكل حضور
-                  </Button>
-
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleBulkMark(false)}
-                    disabled={batchActionLoading}
-                    className="text-xs font-bold text-gray-600 border-gray-200 hover:bg-gray-50"
-                  >
-                    <Ban className="w-3.5 h-3.5 ml-1" />
-                    تسجيل الكل غياب
-                  </Button>
-                </div>
-              )}
             </div>
           </Card>
 
@@ -654,10 +614,7 @@ export const AttendancePage: React.FC = () => {
                   recordedByInfo={recordedByInfo}
                   isPresent={isPresent}
                   disabled={isLockedForUser}
-                  isToggling={
-                    (toggleMutation.isPending && toggleMutation.variables?.studentId === student.id) ||
-                    batchActionLoading
-                  }
+                  isToggling={toggleMutation.isPending && toggleMutation.variables?.studentId === student.id}
                   onToggle={handleToggle}
                 />
               ))}

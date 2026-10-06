@@ -421,8 +421,8 @@ export const StudentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Floating Batch Action Bar */}
-      {selectedStudentIds.length > 0 && (
+      {/* Floating Batch Action Bar (Only for managers and secretaries) */}
+      {canManagePlacements && selectedStudentIds.length > 0 && (
         <div className="sticky top-4 z-20 bg-gray-900 text-white p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center gap-3">
             <span className="w-7 h-7 rounded-xl bg-primary-500 text-white flex items-center justify-center font-bold text-xs">
@@ -432,33 +432,29 @@ export const StudentsPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            {canManagePlacements && (
-              <>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => {
-                    const targets = students.filter((s) => selectedStudentIds.includes(s.id));
-                    handleOpenQuickAssign(targets);
-                  }}
-                  className="font-bold text-xs shadow-sm"
-                >
-                  <UserCheck className="w-3.5 h-3.5 ml-1.5" />
-                  تعيين خادم مسؤول
-                </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => {
+                const targets = students.filter((s) => selectedStudentIds.includes(s.id));
+                handleOpenQuickAssign(targets);
+              }}
+              className="font-bold text-xs shadow-sm"
+            >
+              <UserCheck className="w-3.5 h-3.5 ml-1.5" />
+              تعيين خادم مسؤول
+            </Button>
 
-                {(isAdmin || isServiceSecretary) && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleOpenBatchMove}
-                    className="font-bold text-xs text-white border-gray-700 hover:bg-gray-800"
-                  >
-                    <ArrowRightLeft className="w-3.5 h-3.5 ml-1.5" />
-                    نقل إلى فصل
-                  </Button>
-                )}
-              </>
+            {(isAdmin || isServiceSecretary) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleOpenBatchMove}
+                className="font-bold text-xs text-white border-gray-700 hover:bg-gray-800"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 ml-1.5" />
+                نقل إلى فصل
+              </Button>
             )}
 
             <button
@@ -494,25 +490,27 @@ export const StudentsPage: React.FC = () => {
             <table className="w-full text-right divide-y divide-gray-100 text-sm">
               <thead className="bg-gray-50/75 text-gray-500 font-bold text-xs uppercase">
                 <tr>
-                  <th className="px-4 py-4 w-10 text-center">
-                    <button
-                      type="button"
-                      onClick={handleSelectAll}
-                      className="text-gray-400 hover:text-primary-600 transition"
-                      title={
-                        selectedStudentIds.length === filteredStudents.length
-                          ? 'إلغاء تحديد الكل'
-                          : 'تحديد الكل'
-                      }
-                    >
-                      {selectedStudentIds.length === filteredStudents.length &&
-                      filteredStudents.length > 0 ? (
-                        <CheckSquare className="w-4 h-4 text-primary-600" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                    </button>
-                  </th>
+                  {canManagePlacements && (
+                    <th className="px-4 py-4 w-10 text-center">
+                      <button
+                        type="button"
+                        onClick={handleSelectAll}
+                        className="text-gray-400 hover:text-primary-600 transition"
+                        title={
+                          selectedStudentIds.length === filteredStudents.length
+                            ? 'إلغاء تحديد الكل'
+                            : 'تحديد الكل'
+                        }
+                      >
+                        {selectedStudentIds.length === filteredStudents.length &&
+                        filteredStudents.length > 0 ? (
+                          <CheckSquare className="w-4 h-4 text-primary-600" />
+                        ) : (
+                          <Square className="w-4 h-4" />
+                        )}
+                      </button>
+                    </th>
+                  )}
                   <th className="px-5 py-4">المخدوم</th>
                   <th className="px-5 py-4">الهاتف وولي الأمر</th>
                   <th className="px-5 py-4">الخدمة والفصل</th>
@@ -532,20 +530,22 @@ export const StudentsPage: React.FC = () => {
                         isSelected ? 'bg-primary-50/40' : 'hover:bg-gray-50/70'
                       }`}
                     >
-                      <td
-                        className="px-4 py-4 text-center"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleSelect(st.id);
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(st.id)}
-                          className="rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
-                        />
-                      </td>
+                      {canManagePlacements && (
+                        <td
+                          className="px-4 py-4 text-center"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelect(st.id);
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(st.id)}
+                            className="rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+                          />
+                        </td>
+                      )}
 
                       <td className="px-5 py-4 font-bold text-gray-900 flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs shrink-0">
@@ -661,20 +661,22 @@ export const StudentsPage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleSelect(st.id);
-                        }}
-                        className="p-1"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleSelect(st.id)}
-                          className="rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
-                        />
-                      </div>
+                      {canManagePlacements && (
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSelect(st.id);
+                          }}
+                          className="p-1"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelect(st.id)}
+                            className="rounded text-primary-600 focus:ring-primary-500 cursor-pointer"
+                          />
+                        </div>
+                      )}
                       <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-sm">
                         {st.fullName.charAt(0)}
                       </div>

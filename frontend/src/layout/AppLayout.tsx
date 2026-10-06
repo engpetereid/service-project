@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { MobileNav } from './MobileNav';
+import { PWAInstallBanner } from '../components/pwa/PWAInstallPrompt';
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -28,6 +29,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
         {/* Mobile Servant Navigation Bar */}
         <MobileNav onOpenSidebar={() => setSidebarOpen(true)} />
+
+        {/* PWA Mobile Install Prompt Banner */}
+        <PWAInstallBanner />
       </div>
     </div>
   );

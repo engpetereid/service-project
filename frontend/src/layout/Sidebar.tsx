@@ -22,6 +22,8 @@ import {
   ClipboardCheck,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import waznaLogo from '../assets/waznaLogo.png';
+import { PWAInstallSidebarButton } from '../components/pwa/PWAInstallPrompt';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -193,9 +195,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {/* Brand Header */}
         <div className="h-16 px-6 border-b border-gray-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 text-white flex items-center justify-center shadow-md shadow-primary-500/20 font-black text-lg">
-              ✝
-            </div>
+            <img
+              src={waznaLogo}
+              alt="شعار وزنة"
+              className="w-10 h-10 rounded-2xl object-cover shadow-md shadow-primary-500/15 border border-gray-100 shrink-0"
+            />
             <div>
               <h2 className="text-base font-black text-gray-900 leading-tight">وزنة</h2>
               <p className="text-[11px] text-gray-400 font-medium">نظام متابعة ورعاية الكنيسة</p>
@@ -276,6 +280,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             );
           })}
         </nav>
+
+        {/* PWA Install Button (Mobile & Desktop) */}
+        <div className="px-3 pb-1">
+          <PWAInstallSidebarButton />
+        </div>
 
         {/* Footer info */}
         <Link
