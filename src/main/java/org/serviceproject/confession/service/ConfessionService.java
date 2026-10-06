@@ -47,6 +47,9 @@ public class ConfessionService {
     private final AcademicYearService academicYearService;
     private final UserAccountRepository userAccountRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.serviceproject.common.config.AppProperties appProperties;
+
     @Transactional
     public ConfessionResponse create(CreateConfessionRequest request, UserPrincipal principal) {
         AcademicYear currentYear = academicYearService.getCurrentEntity();
@@ -267,7 +270,9 @@ public class ConfessionService {
         Map<Long, List<ConfessionRecord>> recordsByStudent = allRecords.stream()
                 .collect(Collectors.groupingBy(cr -> cr.getStudent().getId()));
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = (appProperties != null)
+                ? org.serviceproject.common.util.DateUtil.today(appProperties.timeZone())
+                : LocalDate.now();
         List<StudentConfessionSummaryDto> summaries = new ArrayList<>();
 
         for (StudentPlacement sp : placements) {

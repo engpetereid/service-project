@@ -4,7 +4,7 @@ export interface StudentResponse {
   id: number;
   personId?: number;
   fullName: string;
-  phone: string;
+  phone?: string;
   gender: 'MALE' | 'FEMALE';
   dateOfBirth?: string;
   address?: string;
@@ -29,7 +29,7 @@ export interface StudentResponse {
 
 export interface CreateStudentRequest {
   fullName: string;
-  phone: string;
+  phone?: string;
   gender: 'MALE' | 'FEMALE';
   dateOfBirth?: string;
   address?: string;
@@ -44,7 +44,7 @@ export interface CreateStudentRequest {
 
 export interface UpdateStudentRequest {
   fullName: string;
-  phone: string;
+  phone?: string;
   gender: 'MALE' | 'FEMALE';
   dateOfBirth?: string;
   address?: string;

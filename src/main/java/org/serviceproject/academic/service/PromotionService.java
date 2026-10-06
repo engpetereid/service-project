@@ -44,6 +44,9 @@ public class PromotionService {
     private final StaffPlacementRepository staffPlacementRepository;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private PromotionExecutionHelper promotionExecutionHelper;
+
     @Transactional(readOnly = true)
     public List<PromotionRunResponse> getHistory() {
         return promotionRunRepository.findAllOrderByStartedAtDesc().stream()
@@ -210,6 +213,13 @@ public class PromotionService {
             log.error("Promotion failed for year: {}", targetYear.getName(), ex);
             run.markFailed();
             promotionRunRepository.save(run);
+            if (promotionExecutionHelper != null) {
+                try {
+                    promotionExecutionHelper.recordFailure(run.getId());
+                } catch (Exception helperEx) {
+                    log.error("Failed to persist promotion failure in separate tx", helperEx);
+                }
+            }
             throw AppException.badRequest("PROMOTION_FAILED", "حدث خطأ أثناء تنفيذ عملية الترفيع: " + ex.getMessage());
         }
 

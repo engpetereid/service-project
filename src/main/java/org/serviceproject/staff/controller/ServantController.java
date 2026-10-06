@@ -75,8 +75,8 @@ public class ServantController {
 
     @PostMapping("/{id}/restore")
     @PreAuthorize("hasRole('GENERAL_ADMIN')")
-    public ResponseEntity<Void> restore(@PathVariable Long id) {
-        servantService.restore(id);
+    public ResponseEntity<Void> restore(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        servantService.restore(id, principal);
         return ResponseEntity.ok().build();
     }
 

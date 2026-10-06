@@ -50,6 +50,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -710,39 +711,60 @@ public class StatisticsService {
         }
 
         List<Long> weekIds = pastWeeks.stream().map(Week::getId).toList();
+        List<Long> studentIds = students.stream()
+                .map(sp -> sp.getPerson().getId())
+                .distinct()
+                .toList();
+
+        List<VisitRecord> allVisits = visitRecordRepository.findAllByStudentIdsAndWeekIds(studentIds, weekIds);
+        List<AttendanceRecord> allMeetings = attendanceRecordRepository.findAllPresentByStudentIdsAndWeekIds(studentIds, weekIds);
+
+        Map<Long, List<VisitRecord>> visitsByStudent = new HashMap<>();
+        for (VisitRecord vr : allVisits) {
+            if (vr.getStudent() != null) {
+                visitsByStudent.computeIfAbsent(vr.getStudent().getId(), k -> new ArrayList<>()).add(vr);
+            }
+        }
+
+        Map<Long, Set<Long>> visitedWeeksByStudent = new HashMap<>();
+        for (VisitRecord vr : allVisits) {
+            if (vr.getStudent() != null && vr.getWeek() != null) {
+                visitedWeeksByStudent.computeIfAbsent(vr.getStudent().getId(), k -> new HashSet<>())
+                        .add(vr.getWeek().getId());
+            }
+        }
+
+        Map<Long, Set<Long>> meetingWeeksByStudent = new HashMap<>();
+        for (AttendanceRecord ar : allMeetings) {
+            if (ar.getStudent() != null && ar.getSession() != null &&
+                    ar.getSession().getActivityType() == ActivityType.MEETING &&
+                    ar.getSession().getWeek() != null) {
+                meetingWeeksByStudent.computeIfAbsent(ar.getStudent().getId(), k -> new HashSet<>())
+                        .add(ar.getSession().getWeek().getId());
+            }
+        }
+
         List<AbsenceAlertResponse> alerts = new ArrayList<>();
 
         for (StudentPlacement sp : students) {
             Person st = sp.getPerson();
+            Long sid = st.getId();
 
-            List<VisitRecord> studentVisits = visitRecordRepository.findAllByStudentIdAndWeekIds(st.getId(), weekIds);
-            Set<Long> visitedWeekIds = new HashSet<>();
-            for (VisitRecord vr : studentVisits) {
-                visitedWeekIds.add(vr.getWeek().getId());
-            }
+            Set<Long> visitedWeekIds = visitedWeeksByStudent.getOrDefault(sid, Collections.emptySet());
+            Set<Long> meetingWeekIds = meetingWeeksByStudent.getOrDefault(sid, Collections.emptySet());
 
-            List<AttendanceRecord> meetings = attendanceRecordRepository.findAllPresentByStudentIdAndWeekIds(st.getId(), weekIds);
-            Set<Long> meetingWeekIds = new HashSet<>();
-            for (AttendanceRecord ar : meetings) {
-                if (ar.getSession().getActivityType() == ActivityType.MEETING) {
-                    meetingWeekIds.add(ar.getSession().getWeek().getId());
-                }
-            }
-
-            boolean contactInAllWeeks = true;
+            boolean absentAllWeeks = true;
             for (Long wid : weekIds) {
-                if (!visitedWeekIds.contains(wid) && !meetingWeekIds.contains(wid)) {
-                    // Missed this week
-                } else {
-                    contactInAllWeeks = false;
+                if (visitedWeekIds.contains(wid) || meetingWeekIds.contains(wid)) {
+                    absentAllWeeks = false;
                     break;
                 }
             }
 
-            // If missed in all examined consecutive weeks -> alert!
-            if (contactInAllWeeks) {
+            if (absentAllWeeks) {
                 LocalDate lastContactDate = null;
-                if (!studentVisits.isEmpty()) {
+                List<VisitRecord> studentVisits = visitsByStudent.get(sid);
+                if (studentVisits != null && !studentVisits.isEmpty()) {
                     lastContactDate = studentVisits.get(0).getRecordedAt().toLocalDate();
                 }
 
@@ -963,12 +985,9 @@ public class StatisticsService {
                 .count();
         double tasbehaPercentage = safePercentage(tasbehaCount, total);
 
-        // Overall follow-up index
+        // Overall follow-up index (equal-weight mean of metrics)
         double overallIndex = roundOneDecimal(
-                (WEIGHT_VISIT * visitPercentage) +
-                (WEIGHT_MASS * massPercentage) +
-                (WEIGHT_MEETING * meetingPercentage) +
-                (WEIGHT_TASBEHA * tasbehaPercentage)
+                (visitPercentage + massPercentage + meetingPercentage + tasbehaPercentage) / 4.0
         );
 
         return new DashboardStatisticsResponse(
@@ -1031,22 +1050,37 @@ public class StatisticsService {
         }
 
         List<Long> weekIds = pastWeeks.stream().map(Week::getId).toList();
-        int count = 0;
+        List<Long> studentIds = students.stream()
+                .map(sp -> sp.getPerson().getId())
+                .distinct()
+                .toList();
 
+        List<VisitRecord> allVisits = visitRecordRepository.findAllByStudentIdsAndWeekIds(studentIds, weekIds);
+        List<AttendanceRecord> allMeetings = attendanceRecordRepository.findAllPresentByStudentIdsAndWeekIds(studentIds, weekIds);
+
+        Map<Long, Set<Long>> visitedWeeksByStudent = new HashMap<>();
+        for (VisitRecord vr : allVisits) {
+            if (vr.getStudent() != null && vr.getWeek() != null) {
+                visitedWeeksByStudent.computeIfAbsent(vr.getStudent().getId(), k -> new HashSet<>())
+                        .add(vr.getWeek().getId());
+            }
+        }
+
+        Map<Long, Set<Long>> meetingWeeksByStudent = new HashMap<>();
+        for (AttendanceRecord ar : allMeetings) {
+            if (ar.getStudent() != null && ar.getSession() != null &&
+                    ar.getSession().getActivityType() == ActivityType.MEETING &&
+                    ar.getSession().getWeek() != null) {
+                meetingWeeksByStudent.computeIfAbsent(ar.getStudent().getId(), k -> new HashSet<>())
+                        .add(ar.getSession().getWeek().getId());
+            }
+        }
+
+        int count = 0;
         for (StudentPlacement sp : students) {
             Long sid = sp.getPerson().getId();
-            List<VisitRecord> studentVisits = visitRecordRepository.findAllByStudentIdAndWeekIds(sid, weekIds);
-            List<AttendanceRecord> meetings = attendanceRecordRepository.findAllPresentByStudentIdAndWeekIds(sid, weekIds);
-
-            Set<Long> visitedWeekIds = new HashSet<>();
-            for (VisitRecord vr : studentVisits) visitedWeekIds.add(vr.getWeek().getId());
-
-            Set<Long> meetingWeekIds = new HashSet<>();
-            for (AttendanceRecord ar : meetings) {
-                if (ar.getSession().getActivityType() == ActivityType.MEETING) {
-                    meetingWeekIds.add(ar.getSession().getWeek().getId());
-                }
-            }
+            Set<Long> visitedWeekIds = visitedWeeksByStudent.getOrDefault(sid, Collections.emptySet());
+            Set<Long> meetingWeekIds = meetingWeeksByStudent.getOrDefault(sid, Collections.emptySet());
 
             boolean absentAllWeeks = true;
             for (Long wid : weekIds) {

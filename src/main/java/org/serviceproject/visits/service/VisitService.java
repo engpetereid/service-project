@@ -178,6 +178,7 @@ public class VisitService {
                 .orElseThrow(() -> AppException.unauthorized("RECORDER_NOT_FOUND", "المستخدم المسجل غير موجود"));
 
         // 7. Save record with immutable placement snapshots
+        int maxNoteScore = getMaxNoteScore();
         VisitRecord visitRecord = new VisitRecord(
                 placement.getPerson(),
                 week,
@@ -189,6 +190,7 @@ public class VisitService {
                 request.prayerScore(),
                 request.readingScore(),
                 request.noteScore(),
+                maxNoteScore,
                 request.notes(),
                 recorder
         );
@@ -352,6 +354,7 @@ public class VisitService {
                 vr.getPrayerScore(),
                 vr.getReadingScore(),
                 vr.getNoteScore(),
+                vr.getMaxNoteScoreSnapshot(),
                 vr.getNotes(),
                 vr.getRecordedBy().getId(),
                 vr.getRecordedBy().getPerson().getFullName(),

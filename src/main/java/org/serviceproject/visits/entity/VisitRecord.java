@@ -72,6 +72,9 @@ public class VisitRecord extends BaseEntity {
     @Column(name = "note_score")
     private Integer noteScore;
 
+    @Column(name = "max_note_score_snapshot", nullable = false)
+    private Integer maxNoteScoreSnapshot = 21;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 
@@ -86,6 +89,14 @@ public class VisitRecord extends BaseEntity {
                        Ministry ministrySnap, GradeClass classSnap, Person servantSnap,
                        VisitMethod method, Integer prayerScore, Integer readingScore,
                        Integer noteScore, String notes, UserAccount recordedBy) {
+        this(student, week, academicYear, ministrySnap, classSnap, servantSnap,
+             method, prayerScore, readingScore, noteScore, 21, notes, recordedBy);
+    }
+
+    public VisitRecord(Person student, Week week, AcademicYear academicYear,
+                       Ministry ministrySnap, GradeClass classSnap, Person servantSnap,
+                       VisitMethod method, Integer prayerScore, Integer readingScore,
+                       Integer noteScore, Integer maxNoteScoreSnapshot, String notes, UserAccount recordedBy) {
         this.student = student;
         this.week = week;
         this.academicYear = academicYear;
@@ -96,6 +107,7 @@ public class VisitRecord extends BaseEntity {
         this.prayerScore = prayerScore;
         this.readingScore = readingScore;
         this.noteScore = noteScore;
+        this.maxNoteScoreSnapshot = (maxNoteScoreSnapshot != null && maxNoteScoreSnapshot > 0) ? maxNoteScoreSnapshot : 21;
         this.notes = notes;
         this.recordedBy = recordedBy;
         this.recordedAt = LocalDateTime.now();

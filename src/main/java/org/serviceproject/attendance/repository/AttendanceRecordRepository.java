@@ -44,6 +44,13 @@ public interface AttendanceRecordRepository extends JpaRepository<AttendanceReco
 
     @Query("SELECT ar FROM AttendanceRecord ar " +
            "JOIN FETCH ar.session s " +
+           "WHERE ar.student.id IN :studentIds AND s.week.id IN :weekIds AND ar.present = true")
+    List<AttendanceRecord> findAllPresentByStudentIdsAndWeekIds(
+            @Param("studentIds") List<Long> studentIds,
+            @Param("weekIds") List<Long> weekIds);
+
+    @Query("SELECT ar FROM AttendanceRecord ar " +
+           "JOIN FETCH ar.session s " +
            "WHERE ar.student.id = :studentId AND ar.present = true")
     List<AttendanceRecord> findAllPresentByStudentId(@Param("studentId") Long studentId);
 }

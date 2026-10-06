@@ -31,12 +31,27 @@ export const usePermissions = () => {
     const servantRole = roles.find((r) => r.role === 'SERVANT');
     const isServant = !!servantRole;
 
+    const managedMinistryIds = Array.from(
+      new Set(
+        roles
+          .map((r) => r.ministryId)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+    const managedClassIds = Array.from(
+      new Set(
+        roles
+          .map((r) => r.classId)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+
     let managedMinistryId: number | null = null;
     let managedClassId: number | null = null;
 
     if (!isAdmin) {
-      managedMinistryId = serviceSecretaryRole?.ministryId ?? classSecretaryRole?.ministryId ?? servantRole?.ministryId ?? null;
-      managedClassId = classSecretaryRole?.classId ?? servantRole?.classId ?? null;
+      managedMinistryId = serviceSecretaryRole?.ministryId ?? classSecretaryRole?.ministryId ?? servantRole?.ministryId ?? (managedMinistryIds[0] ?? null);
+      managedClassId = classSecretaryRole?.classId ?? servantRole?.classId ?? (managedClassIds[0] ?? null);
     }
 
     const hasRole = (role: Role) => roles.some((r) => r.role === role);
@@ -51,6 +66,8 @@ export const usePermissions = () => {
       hasAnyRole,
       managedMinistryId,
       managedClassId,
+      managedMinistryIds,
+      managedClassIds,
     };
   }, [user]);
 

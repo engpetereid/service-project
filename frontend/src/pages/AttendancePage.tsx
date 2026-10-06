@@ -199,7 +199,7 @@ export const AttendancePage: React.FC = () => {
         if (debouncedNameSearch.trim()) {
           const query = debouncedNameSearch.toLowerCase().trim();
           const matchesName = s.fullName.toLowerCase().includes(query);
-          const matchesPhone = s.phone.includes(query);
+          const matchesPhone = Boolean(s.phone?.includes(query));
           if (!matchesName && !matchesPhone) return false;
         }
 

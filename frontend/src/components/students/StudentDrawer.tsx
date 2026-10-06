@@ -106,7 +106,7 @@ export const StudentDrawer: React.FC<StudentDrawerProps> = ({
   useEffect(() => {
     if (student) {
       setFullName(student.fullName);
-      setPhone(student.phone);
+      setPhone(student.phone || '');
       setGender(student.gender);
       setDateOfBirth(student.dateOfBirth || '');
       setAddress(student.address || '');
@@ -160,8 +160,8 @@ export const StudentDrawer: React.FC<StudentDrawerProps> = ({
     e.preventDefault();
     setError(null);
 
-    if (!fullName.trim() || !phone.trim() || !ministryId || !classId) {
-      setError('يرجى ملء جميع الحقول المطلوبة (الاسم، الهاتف، الخدمة، والفصل). لا يُسمح بإضافة مخدوم غير مسكن بفصل.');
+    if (!fullName.trim() || (!phone.trim() && !guardianPhone.trim()) || !ministryId || !classId) {
+      setError('يرجى ملء الحقول المطلوبة (الاسم، ورقم هاتف المخدوم أو ولي الأمر، والخدمة، والفصل). لا يُسمح بإضافة مخدوم غير مسكن بفصل.');
       return;
     }
 
@@ -170,7 +170,7 @@ export const StudentDrawer: React.FC<StudentDrawerProps> = ({
       if (student) {
         await studentsApi.update(student.id, {
           fullName: fullName.trim(),
-          phone: phone.trim(),
+          phone: phone.trim() || undefined,
           gender,
           dateOfBirth: dateOfBirth || undefined,
           address: address.trim() || undefined,
@@ -188,7 +188,7 @@ export const StudentDrawer: React.FC<StudentDrawerProps> = ({
 
         await studentsApi.create({
           fullName: fullName.trim(),
-          phone: phone.trim(),
+          phone: phone.trim() || undefined,
           gender,
           dateOfBirth: dateOfBirth || undefined,
           address: address.trim() || undefined,
@@ -363,12 +363,11 @@ export const StudentDrawer: React.FC<StudentDrawerProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
-                  label="رقم هاتف المخدوم *"
+                  label="رقم هاتف المخدوم (أو ولي الأمر)"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  required
                   dir="ltr"
-                  placeholder="010XXXXXXXX"
+                  placeholder="010XXXXXXXX (أو هاتف ولي الأمر بالأسفل)"
                   className="text-left font-mono"
                 />
 

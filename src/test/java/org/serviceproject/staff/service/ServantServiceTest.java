@@ -218,7 +218,7 @@ class ServantServiceTest {
         assertEquals(1, result.size());
         assertEquals(999L, result.get(0).personId());
         assertTrue(result.get(0).isClassSecretary());
-        verify(staffPlacementRepository).save(any(StaffPlacement.class));
+        verify(staffPlacementRepository, never()).save(any(StaffPlacement.class));
     }
 
     @Test

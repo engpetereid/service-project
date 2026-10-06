@@ -27,7 +27,7 @@ export interface UpdateConfessionRequest {
 export interface StudentConfessionSummary {
   studentId: number;
   studentName: string;
-  phone: string;
+  phone?: string;
   gender: 'MALE' | 'FEMALE';
   classId?: number | null;
   className?: string | null;
@@ -50,7 +50,7 @@ export interface CreateConfessionSessionRequest {
 export interface SessionStudentDto {
   studentId: number;
   studentName: string;
-  phone: string;
+  phone?: string;
   className?: string | null;
   recordId?: number | null;
 }

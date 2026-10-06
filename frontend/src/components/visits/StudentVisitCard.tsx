@@ -32,7 +32,7 @@ export const StudentVisitCard: React.FC<StudentVisitCardProps> = ({
   const isVisited = item.visited;
   const record = item.visitRecord;
 
-  const studentCleanPhone = item.phone.replace(/\D/g, '');
+  const studentCleanPhone = item.phone ? item.phone.replace(/\D/g, '') : '';
   const guardianCleanPhone = item.guardianPhone?.replace(/\D/g, '');
 
   const studentWaMsg = encodeURIComponent(
@@ -99,27 +99,29 @@ export const StudentVisitCard: React.FC<StudentVisitCardProps> = ({
         {/* Student and Guardian Contact Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Student Phone */}
-          <div className="flex items-center gap-1 bg-gray-50 p-1 px-2 rounded-xl border border-gray-100">
-            <span className="font-mono text-xs font-semibold text-gray-800" dir="ltr">
-              {item.phone}
-            </span>
-            <a
-              href={`tel:${item.phone}`}
-              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition"
-              title="اتصال هاتفي بالمخدوم"
-            >
-              <Phone className="w-3.5 h-3.5 text-primary-600" />
-            </a>
-            <a
-              href={studentWaUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="p-1.5 rounded-lg hover:bg-emerald-100 text-emerald-600 transition"
-              title="محادثة واتساب سريعة"
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-            </a>
-          </div>
+          {item.phone && (
+            <div className="flex items-center gap-1 bg-gray-50 p-1 px-2 rounded-xl border border-gray-100">
+              <span className="font-mono text-xs font-semibold text-gray-800" dir="ltr">
+                {item.phone}
+              </span>
+              <a
+                href={`tel:${item.phone}`}
+                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition"
+                title="اتصال هاتفي بالمخدوم"
+              >
+                <Phone className="w-3.5 h-3.5 text-primary-600" />
+              </a>
+              <a
+                href={studentWaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="p-1.5 rounded-lg hover:bg-emerald-100 text-emerald-600 transition"
+                title="محادثة واتساب سريعة"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
 
           {/* Guardian Phone */}
           {item.guardianPhone && (

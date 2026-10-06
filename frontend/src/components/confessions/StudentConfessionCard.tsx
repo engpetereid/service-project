@@ -26,7 +26,7 @@ export const StudentConfessionCard: React.FC<StudentConfessionCardProps> = ({
   onRecordConfession,
   onViewHistory,
 }) => {
-  const cleanPhone = item.phone.replace(/\D/g, '');
+  const cleanPhone = item.phone ? item.phone.replace(/\D/g, '') : '';
 
   // Pre-filled WhatsApp message encouraging confession
   const waReminderMsg = encodeURIComponent(
@@ -142,27 +142,29 @@ export const StudentConfessionCard: React.FC<StudentConfessionCardProps> = ({
           </div>
 
           {/* Direct Phone & WhatsApp buttons */}
-          <div className="flex items-center gap-1 bg-gray-50 p-1 px-2 rounded-xl border border-gray-100">
-            <span className="font-mono text-xs font-semibold text-gray-800" dir="ltr">
-              {item.phone}
-            </span>
-            <a
-              href={`tel:${item.phone}`}
-              className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition"
-              title="اتصال هاتفي بالمخدوم"
-            >
-              <Phone className="w-3.5 h-3.5 text-primary-600" />
-            </a>
-            <a
-              href={waUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="p-1.5 rounded-lg hover:bg-emerald-100 text-emerald-600 transition"
-              title="إرسال تذكير بالاعتراف عبر واتساب"
-            >
-              <MessageCircle className="w-3.5 h-3.5" />
-            </a>
-          </div>
+          {item.phone && (
+            <div className="flex items-center gap-1 bg-gray-50 p-1 px-2 rounded-xl border border-gray-100">
+              <span className="font-mono text-xs font-semibold text-gray-800" dir="ltr">
+                {item.phone}
+              </span>
+              <a
+                href={`tel:${item.phone}`}
+                className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-600 transition"
+                title="اتصال هاتفي بالمخدوم"
+              >
+                <Phone className="w-3.5 h-3.5 text-primary-600" />
+              </a>
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="p-1.5 rounded-lg hover:bg-emerald-100 text-emerald-600 transition"
+                title="إرسال تذكير بالاعتراف عبر واتساب"
+              >
+                <MessageCircle className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Last Confession Date */}

@@ -97,6 +97,12 @@ public interface VisitRecordRepository extends JpaRepository<VisitRecord, Long> 
             @Param("weekIds") List<Long> weekIds);
 
     @Query("SELECT vr FROM VisitRecord vr " +
+           "WHERE vr.student.id IN :studentIds AND vr.week.id IN :weekIds")
+    List<VisitRecord> findAllByStudentIdsAndWeekIds(
+            @Param("studentIds") List<Long> studentIds,
+            @Param("weekIds") List<Long> weekIds);
+
+    @Query("SELECT vr FROM VisitRecord vr " +
            "JOIN FETCH vr.student s " +
            "JOIN FETCH vr.week w " +
            "LEFT JOIN FETCH vr.servantSnap serv " +

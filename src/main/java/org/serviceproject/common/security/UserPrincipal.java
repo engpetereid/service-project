@@ -102,6 +102,13 @@ public class UserPrincipal implements UserDetails {
                 .orElse(null);
     }
 
+    public Set<Long> getServiceSecretaryMinistryIds() {
+        return roleScopes.stream()
+                .filter(rs -> rs.role() == Role.SERVICE_SECRETARY && rs.ministryId() != null)
+                .map(RoleWithScope::ministryId)
+                .collect(Collectors.toSet());
+    }
+
     /**
      * Returns the class ID scoped to the CLASS_SECRETARY role, or null.
      */
@@ -111,6 +118,13 @@ public class UserPrincipal implements UserDetails {
                 .map(RoleWithScope::classId)
                 .findFirst()
                 .orElse(null);
+    }
+
+    public Set<Long> getClassSecretaryClassIds() {
+        return roleScopes.stream()
+                .filter(rs -> rs.role() == Role.CLASS_SECRETARY && rs.classId() != null)
+                .map(RoleWithScope::classId)
+                .collect(Collectors.toSet());
     }
 
     // ── Factory ──────────────────────────────────────────────────────

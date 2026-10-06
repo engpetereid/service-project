@@ -138,10 +138,23 @@ public class ServantService {
         if (existingPersonOpt.isPresent()) {
             person = existingPersonOpt.get();
             if (person.isDeleted()) {
+                if (principal != null && !principal.isAdmin()) {
+                    throw AppException.forbidden("CANNOT_RESTORE_PERSON", "فقط مسؤول النظام يمكنه استعادة شخص محذوف");
+                }
                 person.restore();
             } else if (staffPlacementRepository.existsByPersonIdAndAcademicYearId(person.getId(), currentYear.getId())) {
                 throw AppException.conflict("SERVANT_ALREADY_PLACED", "الخادم مسجل بالفعل في هذا العام الدراسي");
             }
+
+            Optional<UserAccount> existingAcc = userAccountRepository != null
+                    ? userAccountRepository.findByPersonId(person.getId()) : Optional.empty();
+            if (existingAcc.isPresent() && principal != null && !principal.isAdmin()) {
+                UserAccount acc = existingAcc.get();
+                if (acc.hasRole(Role.GENERAL_ADMIN) || acc.hasRole(Role.SERVICE_SECRETARY)) {
+                    throw AppException.forbidden("CANNOT_MODIFY_ADMIN_ACCOUNT", "لا يمكن تعديل أو إضافة خادم مرتبط بحساب مسؤول أو أمين خدمة");
+                }
+            }
+
             person.setFullName(request.fullName().trim());
             person.setGender(request.gender());
             person.setDateOfBirth(request.dateOfBirth());
@@ -168,22 +181,15 @@ public class ServantService {
         placement = staffPlacementRepository.save(placement);
 
         // Always ensure user account exists with SERVANT role and enabled=true immediately
-        Optional<UserAccount> existingAcc = userAccountRepository.findByPersonId(person.getId());
+        Optional<UserAccount> existingAcc = userAccountRepository != null
+                ? userAccountRepository.findByPersonId(person.getId()) : Optional.empty();
         if (existingAcc.isPresent()) {
             UserAccount acc = existingAcc.get();
             acc.setEnabled(true);
             if (!acc.hasRole(Role.SERVANT)) {
                 acc.addRole(new UserRole(Role.SERVANT));
             }
-            if (request.password() != null && !request.password().isBlank()) {
-                if (request.password().trim().equals(person.getPhone().trim())) {
-                    throw AppException.badRequest("PASSWORD_CANNOT_BE_PHONE", "لا يمكن استخدام رقم الهاتف ككلمة مرور");
-                }
-                if (request.password().trim().length() < 6) {
-                    throw AppException.badRequest("PASSWORD_TOO_SHORT", "كلمة المرور يجب ألا تقل عن 6 أحرف");
-                }
-                acc.setPassword(passwordEncoder.encode(request.password().trim()));
-            }
+            // CRITICAL FIX: NEVER overwrite an existing user's password during servant registration.
             userAccountRepository.save(acc);
         } else {
             String initialPassword = (request.password() != null && !request.password().isBlank())
@@ -250,6 +256,10 @@ public class ServantService {
     public void softDelete(Long personId, UserPrincipal principal) {
         checkCanAddOrEdit(principal);
 
+        if (principal != null && principal.getPersonId() != null && principal.getPersonId().equals(personId)) {
+            throw AppException.badRequest("CANNOT_DELETE_SELF", "لا يمكنك حذف حسابك الشخصي");
+        }
+
         AcademicYear currentYear = academicYearService.getCurrentEntity();
         StaffPlacement placement = staffPlacementRepository.findByPersonIdAndAcademicYearId(personId, currentYear.getId())
                 .orElseThrow(() -> AppException.notFound("SERVANT_NOT_FOUND", "الخادم غير موجود في العام الدراسي الحالي"));
@@ -257,14 +267,26 @@ public class ServantService {
         checkEditScope(placement, principal);
 
         Person person = placement.getPerson();
+
+        if (userAccountRepository != null) {
+            userAccountRepository.findByPersonId(person.getId()).ifPresent(acc -> {
+                if (acc.hasRole(Role.GENERAL_ADMIN)) {
+                    long adminCount = userAccountRepository.countActiveGeneralAdmins();
+                    if (adminCount <= 1) {
+                        throw AppException.badRequest("CANNOT_DELETE_LAST_ADMIN", "لا يمكن حذف آخر مسؤول عام (أدمن) في النظام");
+                    }
+                }
+                if ((acc.hasRole(Role.GENERAL_ADMIN) || acc.hasRole(Role.SERVICE_SECRETARY)) && principal != null && !principal.isAdmin()) {
+                    throw AppException.forbidden("CANNOT_DELETE_HIGHER_ROLE", "لا يمكنك حذف شخص لديه رتبة إدارية أعلى");
+                }
+                acc.setEnabled(false);
+                acc.incrementTokenVersion();
+                userAccountRepository.save(acc);
+            });
+        }
+
         person.softDelete();
         personRepository.save(person);
-
-        userAccountRepository.findByPersonId(person.getId()).ifPresent(acc -> {
-            acc.setEnabled(false);
-            acc.incrementTokenVersion();
-            userAccountRepository.save(acc);
-        });
 
         // Automatically unassign active students assigned to this servant in current academic year
         int unassignedCount = 0;
@@ -308,6 +330,11 @@ public class ServantService {
 
     @Transactional
     public void restore(Long personId) {
+        restore(personId, null);
+    }
+
+    @Transactional
+    public void restore(Long personId, UserPrincipal principal) {
         Person person = personRepository.findById(personId)
                 .orElseThrow(() -> AppException.notFound("PERSON_NOT_FOUND", "الخادم غير موجود"));
 
@@ -324,7 +351,8 @@ public class ServantService {
         });
 
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.system(
+            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.of(
+                    principal,
                     org.serviceproject.audit.entity.AuditAction.RESTORE,
                     "Servant",
                     personId,
@@ -502,8 +530,7 @@ public class ServantService {
                         sp.setGradeClass(gc);
                         sp.setMinistry(gc.getMinistry());
                     }
-                    StaffPlacement savedSp = staffPlacementRepository.save(sp);
-                    placements.add(0, savedSp != null ? savedSp : sp);
+                    placements.add(0, sp);
                 }
             }
         }

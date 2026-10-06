@@ -154,7 +154,7 @@ export const ConfessionsPage: React.FC = () => {
       const matchStudent = s.students.some(
         (st) =>
           st.studentName.toLowerCase().includes(q) ||
-          st.phone.includes(q) ||
+          (st.phone && st.phone.includes(q)) ||
           (st.className && st.className.toLowerCase().includes(q))
       );
       return matchFather || matchDate || matchNotes || matchRecorder || matchStudent;
@@ -179,7 +179,7 @@ export const ConfessionsPage: React.FC = () => {
       if (debouncedSearch.trim()) {
         const q = debouncedSearch.toLowerCase().trim();
         const matchesName = item.studentName.toLowerCase().includes(q);
-        const matchesPhone = item.phone.includes(q);
+        const matchesPhone = Boolean(item.phone && item.phone.includes(q));
         const matchesFather = item.confessionFather?.toLowerCase().includes(q) ?? false;
         if (!matchesName && !matchesPhone && !matchesFather) return false;
       }
@@ -483,9 +483,11 @@ export const ConfessionsPage: React.FC = () => {
                                           {st.className}
                                         </span>
                                       )}
-                                      <span className="font-mono text-gray-400" dir="ltr">
-                                        {st.phone}
-                                      </span>
+                                      {st.phone && (
+                                        <span className="font-mono text-gray-400" dir="ltr">
+                                          {st.phone}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>

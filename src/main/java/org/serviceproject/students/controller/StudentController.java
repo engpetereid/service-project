@@ -102,8 +102,8 @@ public class StudentController {
 
     @PostMapping("/{id}/restore")
     @PreAuthorize("hasRole('GENERAL_ADMIN')")
-    public ResponseEntity<Void> restore(@PathVariable Long id) {
-        studentService.restore(id);
+    public ResponseEntity<Void> restore(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        studentService.restore(id, principal);
         return ResponseEntity.ok().build();
     }
 }

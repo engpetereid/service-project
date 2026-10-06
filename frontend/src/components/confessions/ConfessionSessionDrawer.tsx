@@ -34,7 +34,7 @@ interface ConfessionSessionDrawerProps {
 interface SelectedStudentItem {
   id: number;
   fullName: string;
-  phone: string;
+  phone?: string;
   className?: string | null;
   confessionFather?: string | null;
 }

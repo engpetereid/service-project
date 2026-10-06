@@ -198,9 +198,10 @@ export const VisitsPage: React.FC = () => {
       if (debouncedSearch.trim()) {
         const q = debouncedSearch.toLowerCase().trim();
         const matchesName = item.studentName.toLowerCase().includes(q);
-        const matchesPhone = item.phone.includes(q);
+        const matchesPhone = Boolean(item.phone && item.phone.includes(q));
+        const matchesGuardian = Boolean(item.guardianPhone && item.guardianPhone.includes(q));
         const matchesAddress = item.address?.toLowerCase().includes(q) ?? false;
-        if (!matchesName && !matchesPhone && !matchesAddress) return false;
+        if (!matchesName && !matchesPhone && !matchesGuardian && !matchesAddress) return false;
       }
 
       return true;

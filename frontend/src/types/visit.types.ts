@@ -54,7 +54,7 @@ export interface UpdateVisitRequest {
 export interface StudentVisitStatusResponse {
   studentId: number;
   studentName: string;
-  phone: string;
+  phone?: string;
   gender: 'MALE' | 'FEMALE';
   address?: string;
   guardianPhone?: string;

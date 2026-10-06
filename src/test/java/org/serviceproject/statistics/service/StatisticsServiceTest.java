@@ -259,9 +259,8 @@ class StatisticsServiceTest {
         assertEquals(0, response.tasbehaAttendanceCount());
         assertEquals(0.0, response.tasbehaAttendancePercentage());
 
-        // Expected index = (0.40 * 50) + (0.25 * 100) + (0.25 * 50) + (0.10 * 0)
-        // = 20.0 + 25.0 + 12.5 + 0.0 = 57.5
-        assertEquals(57.5, response.overallFollowupIndex());
+        // Expected index = equal-weight mean of 4 metrics: (50.0 + 100.0 + 50.0 + 0.0) / 4.0 = 50.0
+        assertEquals(50.0, response.overallFollowupIndex());
     }
 
     @Test
@@ -420,15 +419,11 @@ class StatisticsServiceTest {
 
         List<Long> weekIds = List.of(10L, 9L);
 
-        // Student1 has NO visits and NO meetings in weekIds -> absent
-        when(visitRecordRepository.findAllByStudentIdAndWeekIds(5001L, weekIds)).thenReturn(Collections.emptyList());
-        when(attendanceRecordRepository.findAllPresentByStudentIdAndWeekIds(5001L, weekIds)).thenReturn(Collections.emptyList());
-
-        // Student2 had a visit in week 10 -> present
+        // Student1 has NO visits and NO meetings, Student2 had a visit in week 10 -> present
         VisitRecord vrStudent2 = new VisitRecord(student2, week10, academicYear, ministry, gradeClass, servant1,
                 VisitMethod.VISIT, 6, 6, 12, null, servantAccount);
-        when(visitRecordRepository.findAllByStudentIdAndWeekIds(5002L, weekIds)).thenReturn(List.of(vrStudent2));
-        when(attendanceRecordRepository.findAllPresentByStudentIdAndWeekIds(5002L, weekIds)).thenReturn(Collections.emptyList());
+        when(visitRecordRepository.findAllByStudentIdsAndWeekIds(List.of(5001L, 5002L), weekIds)).thenReturn(List.of(vrStudent2));
+        when(attendanceRecordRepository.findAllPresentByStudentIdsAndWeekIds(List.of(5001L, 5002L), weekIds)).thenReturn(Collections.emptyList());
 
         List<AbsenceAlertResponse> alerts = statisticsService.getAbsenceAlerts(adminPrincipal, 2);
 

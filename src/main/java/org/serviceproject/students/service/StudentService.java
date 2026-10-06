@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Service managing students and their academic-year placements.
@@ -93,13 +94,13 @@ public class StudentService {
         }
 
         if (principal.isServiceSecretary()) {
-            Long scopedMinistryId = principal.getServiceSecretaryMinistryId();
-            if (ministryId != null && !scopedMinistryId.equals(ministryId)) {
+            Set<Long> scopedMinistryIds = principal.getServiceSecretaryMinistryIds();
+            if (ministryId != null && !scopedMinistryIds.contains(ministryId)) {
                 throw AppException.forbidden("ACCESS_DENIED", "ليس لديك صلاحية على هذه الخدمة");
             }
             if (classId != null) {
                 GradeClass gc = getGradeClassOrThrow(classId);
-                if (!scopedMinistryId.equals(gc.getMinistry().getId())) {
+                if (!scopedMinistryIds.contains(gc.getMinistry().getId())) {
                     throw AppException.forbidden("ACCESS_DENIED", "هذا الفصل لا يتبع خدمتك المصرح بها");
                 }
                 return studentPlacementRepository.findAllByAcademicYearIdAndClassIdAndStatus(yearId, classId, StudentStatus.ACTIVE).stream()
@@ -107,25 +108,47 @@ public class StudentService {
             }
             if (servantId != null) {
                 return studentPlacementRepository.findAllByAcademicYearIdAndServantIdAndStatus(yearId, servantId, StudentStatus.ACTIVE).stream()
-                        .filter(sp -> scopedMinistryId.equals(sp.getMinistry().getId()))
+                        .filter(sp -> sp.getMinistry() != null && scopedMinistryIds.contains(sp.getMinistry().getId()))
                         .map(this::toResponse).toList();
             }
-            return studentPlacementRepository.findAllByAcademicYearIdAndMinistryIdAndStatus(yearId, scopedMinistryId, StudentStatus.ACTIVE).stream()
+            Long targetMid = ministryId != null ? ministryId : principal.getServiceSecretaryMinistryId();
+            return studentPlacementRepository.findAllByAcademicYearIdAndMinistryIdAndStatus(yearId, targetMid, StudentStatus.ACTIVE).stream()
                         .map(this::toResponse).toList();
         }
 
         if (principal.isClassSecretary()) {
+            Set<Long> scopedClassIds = principal.getClassSecretaryClassIds();
             Long scopedClassId = principal.getClassSecretaryClassId();
-            if (classId != null && !scopedClassId.equals(classId)) {
+            if ("attendance".equalsIgnoreCase(scope) || "ministry".equalsIgnoreCase(scope)) {
+                GradeClass gc = scopedClassId != null ? gradeClassRepository.findByIdWithMinistry(scopedClassId).orElse(null) : null;
+                if (gc != null && gc.getMinistry() != null) {
+                    List<StudentPlacement> list = studentPlacementRepository.findAllByAcademicYearIdAndMinistryIdAndStatus(
+                            yearId, gc.getMinistry().getId(), StudentStatus.ACTIVE);
+                    if (classId != null) {
+                        list = list.stream().filter(sp -> sp.getGradeClass() != null && classId.equals(sp.getGradeClass().getId())).toList();
+                    }
+                    if (search != null && !search.isBlank()) {
+                        String searchLower = search.trim().toLowerCase();
+                        list = list.stream().filter(sp ->
+                                (sp.getPerson() != null && sp.getPerson().getFullName() != null && sp.getPerson().getFullName().toLowerCase().contains(searchLower)) ||
+                                (sp.getPerson() != null && sp.getPerson().getPhone() != null && sp.getPerson().getPhone().contains(searchLower)) ||
+                                (sp.getGuardianPhone() != null && sp.getGuardianPhone().contains(searchLower))
+                        ).toList();
+                    }
+                    return list.stream().map(this::toResponse).toList();
+                }
+            }
+            if (classId != null && !scopedClassIds.contains(classId)) {
                 throw AppException.forbidden("ACCESS_DENIED", "ليس لديك صلاحية على هذا الفصل");
             }
+            Long targetCid = classId != null ? classId : scopedClassId;
             List<StudentPlacement> list;
             if (servantId != null) {
                 list = studentPlacementRepository.findAllByAcademicYearIdAndServantIdAndStatus(yearId, servantId, StudentStatus.ACTIVE).stream()
-                        .filter(sp -> sp.getGradeClass() != null && scopedClassId.equals(sp.getGradeClass().getId()))
+                        .filter(sp -> sp.getGradeClass() != null && scopedClassIds.contains(sp.getGradeClass().getId()))
                         .toList();
             } else {
-                list = studentPlacementRepository.findAllByAcademicYearIdAndClassIdAndStatus(yearId, scopedClassId, StudentStatus.ACTIVE);
+                list = studentPlacementRepository.findAllByAcademicYearIdAndClassIdAndStatus(yearId, targetCid, StudentStatus.ACTIVE);
             }
 
             if (search != null && !search.isBlank()) {
@@ -224,27 +247,47 @@ public class StudentService {
             responsibleServant = getAndValidateServant(request.servantId(), currentYear.getId(), ministry.getId(), gradeClass.getId());
         }
 
-        String phone = request.phone().trim();
-        Person person;
-        Optional<Person> existingPersonOpt = personRepository.findByPhone(phone);
+        String rawPhone = (request.phone() != null && !request.phone().isBlank()) ? request.phone().trim() : null;
+        String rawGuardianPhone = (request.guardianPhone() != null && !request.guardianPhone().isBlank()) ? request.guardianPhone().trim() : null;
 
-        if (existingPersonOpt.isPresent()) {
-            person = existingPersonOpt.get();
-            if (person.isDeleted()) {
-                person.restore();
-            } else if (studentPlacementRepository.existsByPersonIdAndAcademicYearId(person.getId(), currentYear.getId())) {
-                throw AppException.conflict("STUDENT_ALREADY_PLACED", "المخدوم مسجل بالفعل في هذا العام الدراسي");
+        if (rawPhone == null && rawGuardianPhone == null) {
+            throw AppException.badRequest("PHONE_REQUIRED", "يجب إدخال رقم هاتف المخدوم أو رقم هاتف ولي الأمر على الأقل");
+        }
+
+        Person person = null;
+        if (rawPhone != null) {
+            Optional<Person> existingPersonOpt = personRepository.findByPhone(rawPhone);
+            if (existingPersonOpt.isPresent()) {
+                Person existing = existingPersonOpt.get();
+                if (existing.isDeleted()) {
+                    if (principal != null && !principal.isAdmin()) {
+                        throw AppException.forbidden("CANNOT_RESTORE_PERSON", "فقط مسؤول النظام يمكنه استعادة شخص محذوف");
+                    }
+                    existing.restore();
+                } else if (studentPlacementRepository.existsByPersonIdAndAcademicYearId(existing.getId(), currentYear.getId())) {
+                    throw AppException.conflict("STUDENT_ALREADY_PLACED", "المخدوم مسجل بالفعل في هذا العام الدراسي");
+                }
+
+                if (staffPlacementRepository != null && staffPlacementRepository.existsByPersonIdAndAcademicYearId(existing.getId(), currentYear.getId())) {
+                    throw AppException.conflict("PERSON_IS_STAFF", "رقم الهاتف مسجل بالفعل لخادم في الخدمة");
+                }
+                if (userAccountRepository != null && userAccountRepository.findByPersonId(existing.getId()).isPresent()) {
+                    throw AppException.conflict("PERSON_IS_USER", "رقم الهاتف مسجل بالفعل لحساب مستخدم");
+                }
+
+                existing.setFullName(request.fullName().trim());
+                existing.setGender(request.gender());
+                if (request.dateOfBirth() != null) existing.setDateOfBirth(request.dateOfBirth());
+                if (request.address() != null) existing.setAddress(request.address());
+                if (request.confessionFather() != null) existing.setConfessionFather(request.confessionFather());
+                person = personRepository.save(existing);
             }
-            person.setFullName(request.fullName().trim());
-            person.setGender(request.gender());
-            person.setDateOfBirth(request.dateOfBirth());
-            person.setAddress(request.address());
-            person.setConfessionFather(request.confessionFather());
-            person = personRepository.save(person);
-        } else {
+        }
+
+        if (person == null) {
             person = new Person();
             person.setFullName(request.fullName().trim());
-            person.setPhone(phone);
+            person.setPhone(rawPhone);
             person.setGender(request.gender());
             person.setDateOfBirth(request.dateOfBirth());
             person.setAddress(request.address());
@@ -260,7 +303,7 @@ public class StudentService {
         placement.setGradeClass(gradeClass);
         placement.assignServant(responsibleServant);
         placement.setStatus(StudentStatus.ACTIVE);
-        placement.setGuardianPhone(request.guardianPhone());
+        placement.setGuardianPhone(rawGuardianPhone);
         placement.setTalents(request.talents());
         placement.setAdditionalDetails(request.additionalDetails());
 
@@ -306,27 +349,40 @@ public class StudentService {
 
             placement.setMinistry(ministry);
             placement.setGradeClass(gradeClass);
+            // Clear servant assignment on class change to avoid cross-class servant assignments
+            if (requestedClassChange) {
+                placement.assignServant(null);
+            }
         }
 
         checkEditScope(placement, principal);
 
         Person person = placement.getPerson();
-        String newPhone = request.phone().trim();
-        boolean phoneChanged = !person.getPhone().equals(newPhone);
+        String newPhone = (request.phone() != null && !request.phone().isBlank()) ? request.phone().trim() : null;
+        String newGuardianPhone = (request.guardianPhone() != null && !request.guardianPhone().isBlank()) ? request.guardianPhone().trim() : null;
 
-        if (phoneChanged && personRepository.existsByPhone(newPhone)) {
-            throw AppException.conflict("PHONE_EXISTS", "رقم الهاتف مستخدم بالفعل");
+        if (newPhone == null && newGuardianPhone == null) {
+            throw AppException.badRequest("PHONE_REQUIRED", "يجب إدخال رقم هاتف المخدوم أو رقم هاتف ولي الأمر على الأقل");
+        }
+
+        if (newPhone != null) {
+            boolean phoneChanged = person.getPhone() == null || !person.getPhone().equals(newPhone);
+            if (phoneChanged && personRepository.existsByPhone(newPhone)) {
+                throw AppException.conflict("PHONE_EXISTS", "رقم الهاتف مستخدم بالفعل");
+            }
+            person.setPhone(newPhone);
+        } else {
+            person.setPhone(null);
         }
 
         person.setFullName(request.fullName().trim());
-        person.setPhone(newPhone);
         person.setGender(request.gender());
         person.setDateOfBirth(request.dateOfBirth());
         person.setAddress(request.address());
         person.setConfessionFather(request.confessionFather());
         personRepository.save(person);
 
-        placement.setGuardianPhone(request.guardianPhone());
+        placement.setGuardianPhone(newGuardianPhone);
         placement.setTalents(request.talents());
         placement.setAdditionalDetails(request.additionalDetails());
 
@@ -455,6 +511,11 @@ public class StudentService {
 
     @Transactional
     public void restore(Long personId) {
+        restore(personId, null);
+    }
+
+    @Transactional
+    public void restore(Long personId, UserPrincipal principal) {
         Person person = personRepository.findById(personId)
                 .orElseThrow(() -> AppException.notFound("PERSON_NOT_FOUND", "المخدوم غير موجود"));
 
@@ -473,7 +534,8 @@ public class StudentService {
         }
 
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.system(
+            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.of(
+                    principal,
                     org.serviceproject.audit.entity.AuditAction.RESTORE,
                     "Student",
                     personId,

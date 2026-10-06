@@ -34,6 +34,15 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.serviceproject.students.repository.StudentPlacementRepository studentPlacementRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.serviceproject.staff.repository.StaffPlacementRepository staffPlacementRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.serviceproject.academic.service.AcademicYearService academicYearService;
+
     @Transactional(readOnly = true)
     public List<UserResponse> findAll() {
         return userAccountRepository.findAllActiveUsers().stream()
@@ -142,6 +151,15 @@ public class UserService {
             validateRoleScope(ra);
         }
 
+        // Protect last admin on role change
+        boolean retainsAdmin = request.roles().stream().anyMatch(r -> r.role() == Role.GENERAL_ADMIN);
+        if (account.hasRole(Role.GENERAL_ADMIN) && !retainsAdmin) {
+            long adminCount = userAccountRepository.countActiveGeneralAdmins();
+            if (adminCount <= 1) {
+                throw AppException.badRequest("CANNOT_REMOVE_LAST_ADMIN", "لا يمكن إزالة رتبة المسؤول العام من آخر مسؤول عام في النظام");
+            }
+        }
+
         List<String> oldRoles = account.getRoles().stream()
                 .map(r -> r.getRole().name() + (r.getMinistryId() != null ? ":" + r.getMinistryId() : ""))
                 .toList();
@@ -176,6 +194,15 @@ public class UserService {
     public void toggleActive(Long userId) {
         UserAccount account = getAccountOrThrow(userId);
         boolean oldStatus = account.isEnabled();
+
+        // Protect last admin from being deactivated
+        if (oldStatus && account.hasRole(Role.GENERAL_ADMIN)) {
+            long adminCount = userAccountRepository.countActiveGeneralAdmins();
+            if (adminCount <= 1) {
+                throw AppException.badRequest("CANNOT_DISABLE_LAST_ADMIN", "لا يمكن تعطيل حساب آخر مسؤول عام في النظام");
+            }
+        }
+
         account.setEnabled(!oldStatus);
 
         // If disabling, invalidate tokens
@@ -249,8 +276,41 @@ public class UserService {
         account.getRoles().clear();
         userAccountRepository.save(account);
 
+        // Automatically unassign active students assigned to this servant in current academic year
+        if (studentPlacementRepository != null && academicYearService != null) {
+            try {
+                org.serviceproject.academic.entity.AcademicYear currYear = academicYearService.getCurrentEntity();
+                if (currYear != null) {
+                    List<org.serviceproject.students.entity.StudentPlacement> assignedStudents =
+                            studentPlacementRepository.findAllByAcademicYearIdAndServantIdAndStatus(
+                                    currYear.getId(), person.getId(), org.serviceproject.students.entity.StudentStatus.ACTIVE);
+                    for (org.serviceproject.students.entity.StudentPlacement sp : assignedStudents) {
+                        sp.assignServant(null);
+                        studentPlacementRepository.save(sp);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // Deactivate staff placements in current year
+        if (staffPlacementRepository != null && academicYearService != null) {
+            try {
+                org.serviceproject.academic.entity.AcademicYear currYear = academicYearService.getCurrentEntity();
+                if (currYear != null) {
+                    staffPlacementRepository.findAllByAcademicYearId(currYear.getId()).stream()
+                            .filter(sp -> sp.getPerson() != null && sp.getPerson().getId().equals(person.getId()))
+                            .forEach(sp -> {
+                                sp.setGradeClass(null);
+                                sp.setMinistry(null);
+                                staffPlacementRepository.save(sp);
+                            });
+                }
+            } catch (Exception ignored) {}
+        }
+
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.system(
+            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.of(
+                    principal,
                     org.serviceproject.audit.entity.AuditAction.DELETE,
                     "UserAccount",
                     userId,

@@ -15,7 +15,6 @@ public record UpdateStudentRequest(
         @NotBlank(message = "اسم المخدوم مطلوب")
         String fullName,
 
-        @NotBlank(message = "رقم الهاتف مطلوب")
         @Size(max = 20, message = "رقم الهاتف يجب ألا يتجاوز 20 رقم")
         String phone,
 
