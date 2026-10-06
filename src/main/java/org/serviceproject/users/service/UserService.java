@@ -3,6 +3,7 @@ package org.serviceproject.users.service;
 import lombok.RequiredArgsConstructor;
 import org.serviceproject.auth.dto.RoleInfo;
 import org.serviceproject.common.exception.AppException;
+import org.serviceproject.common.security.UserPrincipal;
 import org.serviceproject.users.dto.AssignRolesRequest;
 import org.serviceproject.users.dto.CreateUserRequest;
 import org.serviceproject.users.dto.UpdateUserRequest;
@@ -35,7 +36,7 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public List<UserResponse> findAll() {
-        return userAccountRepository.findAll().stream()
+        return userAccountRepository.findAllActiveUsers().stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -218,6 +219,43 @@ public class UserService {
                     userId,
                     "deleted",
                     "restored"
+            ));
+        }
+    }
+
+    @Transactional
+    public void delete(Long userId, UserPrincipal principal) {
+        UserAccount account = getAccountOrThrow(userId);
+        Person person = account.getPerson();
+
+        if (principal != null && principal.getUserId().equals(userId)) {
+            throw AppException.badRequest("CANNOT_DELETE_SELF", "لا يمكنك حذف حسابك الشخصي الحالي");
+        }
+
+        if (account.hasRole(Role.GENERAL_ADMIN)) {
+            long adminCount = userAccountRepository.countActiveGeneralAdmins();
+            if (adminCount <= 1) {
+                throw AppException.badRequest("CANNOT_DELETE_LAST_ADMIN", "لا يمكن حذف آخر مسؤول عام (أدمن) في النظام");
+            }
+        }
+
+        // Soft delete person
+        person.softDelete();
+        personRepository.save(person);
+
+        // Deactivate account and invalidate tokens
+        account.setEnabled(false);
+        account.incrementTokenVersion();
+        account.getRoles().clear();
+        userAccountRepository.save(account);
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(org.serviceproject.audit.event.AuditEvent.system(
+                    org.serviceproject.audit.entity.AuditAction.DELETE,
+                    "UserAccount",
+                    userId,
+                    person.getFullName() + " (" + person.getPhone() + ")",
+                    "Deleted user account and soft-deleted person"
             ));
         }
     }

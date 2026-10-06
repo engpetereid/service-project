@@ -5,7 +5,9 @@ import { ministriesApi } from '../api/ministries.api';
 import { classesApi } from '../api/classes.api';
 import { UserResponse, RoleAssignment } from '../types/user.types';
 import { Role } from '../types/auth.types';
+import { useAuth } from '../auth/useAuth';
 import { CreateUserModal } from '../components/users/CreateUserModal';
+import { EditUserModal } from '../components/users/EditUserModal';
 import { ResetPasswordModal } from '../components/users/ResetPasswordModal';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -27,10 +29,13 @@ import {
   Trash2,
   KeyRound,
   Sparkles,
+  Edit3,
+  AlertTriangle,
 } from 'lucide-react';
 
 export const UsersPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
 
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
@@ -39,6 +44,9 @@ export const UsersPage: React.FC = () => {
 
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
+  const [userToDelete, setUserToDelete] = useState<UserResponse | null>(null);
+  const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
   const [resetPasswordUser, setResetPasswordUser] = useState<UserResponse | null>(null);
 
   // Role Drawer state
@@ -102,6 +110,23 @@ export const UsersPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['admin-setup'] });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: number) => {
+      await usersApi.delete(userId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['servants'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-setup'] });
+      queryClient.invalidateQueries({ queryKey: ['archive'] });
+      setUserToDelete(null);
+      setDeleteUserError(null);
+    },
+    onError: (err: any) => {
+      setDeleteUserError(err?.response?.data?.message || err?.message || 'فشل حذف المستخدم');
     },
   });
 
@@ -430,8 +455,20 @@ export const UsersPage: React.FC = () => {
                         <Button
                           size="sm"
                           variant="outline"
+                          onClick={() => setEditingUser(u)}
+                          className="text-[11px] font-bold py-1 px-2 h-auto text-blue-700 hover:text-blue-800 hover:bg-blue-50 border-blue-200"
+                          title="تعديل بيانات المستخدم"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 ml-1" />
+                          تعديل
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
                           onClick={() => handleOpenRoleDrawer(u)}
-                          className="text-[11px] font-bold py-1 px-2.5 h-auto"
+                          className="text-[11px] font-bold py-1 px-2 h-auto"
+                          title="تعديل الصلاحيات والأدوار"
                         >
                           <Shield className="w-3.5 h-3.5 ml-1" />
                           الصلاحيات
@@ -445,6 +482,28 @@ export const UsersPage: React.FC = () => {
                           title="إعادة تعيين كلمة المرور"
                         >
                           <KeyRound className="w-3.5 h-3.5" />
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={currentUser?.userId === u.userId}
+                          onClick={() => {
+                            setDeleteUserError(null);
+                            setUserToDelete(u);
+                          }}
+                          className={`text-[11px] font-bold py-1 px-2 h-auto ${
+                            currentUser?.userId === u.userId
+                              ? 'text-gray-300 cursor-not-allowed opacity-50'
+                              : 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                          }`}
+                          title={
+                            currentUser?.userId === u.userId
+                              ? 'لا يمكنك حذف حسابك الحالي'
+                              : 'حذف المستخدم'
+                          }
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </td>
@@ -590,6 +649,76 @@ export const UsersPage: React.FC = () => {
         onClose={() => setResetPasswordUser(null)}
         user={resetPasswordUser}
       />
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        isOpen={!!editingUser}
+        onClose={() => setEditingUser(null)}
+        user={editingUser}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['users'] });
+        }}
+      />
+
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">تأكيد حذف المستخدم</h3>
+                <p className="text-xs text-gray-500 font-mono" dir="ltr">{userToDelete.phone}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-700 mb-4 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف حساب المستخدم{' '}
+              <span className="font-bold text-gray-900">"{userToDelete.fullName}"</span>؟
+            </p>
+
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs text-amber-800 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>تنبيه هام</span>
+              </div>
+              <p>
+                سيتم تعطيل الحساب فوراً وإلغاء تسجيل دخوله ونقله للأرشيف. ستبقى كافة سجلات الحضور والافتقاد التاريخية المسجلة باسمه محفوظة للنظام.
+              </p>
+            </div>
+
+            {deleteUserError && (
+              <Alert variant="error" className="mb-4">
+                {deleteUserError}
+              </Alert>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-gray-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setUserToDelete(null);
+                  setDeleteUserError(null);
+                }}
+                disabled={deleteUserMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => deleteUserMutation.mutate(userToDelete.userId)}
+                isLoading={deleteUserMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 border-transparent text-white font-bold"
+              >
+                <Trash2 className="w-4 h-4 ml-1.5" />
+                تأكيد الحذف
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

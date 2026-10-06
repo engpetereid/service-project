@@ -48,4 +48,8 @@ export const usersApi = {
   restore: async (id: number): Promise<void> => {
     await apiClient.post(`/users/${id}/restore`);
   },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/users/${id}`);
+  },
 };

@@ -10,6 +10,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
+import { Alert } from '../components/ui/Alert';
 import { EmptyState } from '../components/ui/EmptyState';
 import { usePermissions } from '../auth/usePermissions';
 import { useDebounce } from '../hooks/useDebounce';
@@ -20,6 +21,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Sparkles,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
 
 export const ServantsPage: React.FC = () => {
@@ -42,6 +45,9 @@ export const ServantsPage: React.FC = () => {
 
   const [activeServant, setActiveServant] = useState<ServantResponse | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [drawerEditMode, setDrawerEditMode] = useState(false);
+  const [servantToDelete, setServantToDelete] = useState<ServantResponse | null>(null);
+  const [deleteServantError, setDeleteServantError] = useState<string | null>(null);
 
   // Queries
   const { data: ministries = [] } = useQuery({
@@ -83,6 +89,26 @@ export const ServantsPage: React.FC = () => {
     },
   });
 
+  const deleteServantMutation = useMutation({
+    mutationFn: async (servant: ServantResponse) => {
+      const servantId = servant.id ?? servant.personId;
+      if (!servantId) return;
+      await servantsApi.softDelete(servantId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['servants'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-setup'] });
+      queryClient.invalidateQueries({ queryKey: ['archive'] });
+      setServantToDelete(null);
+      setDeleteServantError(null);
+      refetch();
+    },
+    onError: (err: any) => {
+      setDeleteServantError(err?.response?.data?.message || err?.message || 'فشل حذف الخادم');
+    },
+  });
+
   // KPI calculations
   const stats = useMemo(() => {
     const total = servants.length;
@@ -102,8 +128,9 @@ export const ServantsPage: React.FC = () => {
     });
   }, [servants, accountFilter]);
 
-  const handleOpenDrawer = (servant: ServantResponse | null) => {
+  const handleOpenDrawer = (servant: ServantResponse | null, editMode = false) => {
     setActiveServant(servant);
+    setDrawerEditMode(editMode);
     setIsDrawerOpen(true);
   };
 
@@ -338,17 +365,49 @@ export const ServantsPage: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4 text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenDrawer(s);
-                        }}
-                        className="text-primary-700 hover:text-primary-900 font-bold text-xs"
-                      >
-                        عرض التفاصيل
-                      </Button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDrawer(s, true);
+                          }}
+                          className="text-[11px] font-bold py-1 px-2 h-auto text-blue-700 hover:text-blue-800 hover:bg-blue-50 border-blue-200"
+                          title="تعديل بيانات الخادم"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 ml-1" />
+                          تعديل
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenDrawer(s, false);
+                          }}
+                          className="text-primary-700 hover:text-primary-900 font-bold text-[11px] py-1 px-2 h-auto"
+                        >
+                          عرض التفاصيل
+                        </Button>
+
+                        {(isAdmin || managedMinistryId === s.ministryId) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteServantError(null);
+                              setServantToDelete(s);
+                            }}
+                            className="text-[11px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 py-1 px-2 h-auto"
+                            title="حذف الخادم"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -361,7 +420,7 @@ export const ServantsPage: React.FC = () => {
             {filteredServants.map((s) => (
               <div
                 key={s.id ?? s.personId}
-                onClick={() => handleOpenDrawer(s)}
+                onClick={() => handleOpenDrawer(s, false)}
                 className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm active:bg-gray-50 transition cursor-pointer space-y-3"
               >
                 <div className="flex items-center justify-between">
@@ -388,10 +447,34 @@ export const ServantsPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded-xl">
-                  <span>{s.ministryName || '—'}</span>
-                  <span>•</span>
-                  <span>{s.className || '—'}</span>
+                <div className="flex items-center justify-between text-xs text-gray-600 bg-gray-50 p-2 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <span>{s.ministryName || '—'}</span>
+                    <span>•</span>
+                    <span>{s.className || '—'}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => handleOpenDrawer(s, true)}
+                      className="p-1 rounded-lg text-blue-600 hover:bg-blue-50 font-bold text-xs"
+                      title="تعديل"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    {(isAdmin || managedMinistryId === s.ministryId) && (
+                      <button
+                        onClick={() => {
+                          setDeleteServantError(null);
+                          setServantToDelete(s);
+                        }}
+                        className="p-1 rounded-lg text-red-600 hover:bg-red-50 font-bold text-xs"
+                        title="حذف"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -405,7 +488,67 @@ export const ServantsPage: React.FC = () => {
         onClose={() => setIsDrawerOpen(false)}
         servant={activeServant}
         onSaved={refetch}
+        initialEditMode={drawerEditMode}
       />
+
+      {/* Delete Servant Confirmation Modal */}
+      {servantToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">تأكيد حذف الخادم</h3>
+                <p className="text-xs text-gray-500 font-mono" dir="ltr">{servantToDelete.phone}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-700 mb-4 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف الخادم{' '}
+              <span className="font-bold text-gray-900">"{servantToDelete.fullName}"</span>؟
+            </p>
+
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs text-amber-800 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>تنبيه هام</span>
+              </div>
+              <p>
+                سيتم نقل بيانات الخادم إلى الأرشيف، مع الحفاظ على كافة سجلات الحضور والافتقاد المسجلة بواسطته في النظام.
+              </p>
+            </div>
+
+            {deleteServantError && (
+              <Alert variant="error" className="mb-4">
+                {deleteServantError}
+              </Alert>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setServantToDelete(null);
+                  setDeleteServantError(null);
+                }}
+                disabled={deleteServantMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => deleteServantMutation.mutate(servantToDelete)}
+                isLoading={deleteServantMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white font-bold"
+              >
+                نعم، احذف الخادم
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

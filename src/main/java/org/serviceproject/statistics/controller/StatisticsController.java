@@ -7,6 +7,7 @@ import org.serviceproject.statistics.dto.AdminSetupResponse;
 import org.serviceproject.statistics.dto.ClassStatisticsResponse;
 import org.serviceproject.statistics.dto.DashboardStatisticsResponse;
 import org.serviceproject.statistics.dto.MinistryStatisticsResponse;
+import org.serviceproject.statistics.dto.ServantPerformanceResponse;
 import org.serviceproject.statistics.dto.ServantStatisticsResponse;
 import org.serviceproject.statistics.dto.StudentStatisticsResponse;
 import org.serviceproject.statistics.dto.WeeklyTrendDataPoint;
@@ -68,6 +69,15 @@ public class StatisticsController {
             @RequestParam(required = false) Long weekId,
             @AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(statisticsService.getServantStatistics(id, weekId, principal));
+    }
+
+    @GetMapping("/servants")
+    public ResponseEntity<ServantPerformanceResponse> getServantsPerformance(
+            @RequestParam(required = false) Long ministryId,
+            @RequestParam(required = false) Long classId,
+            @RequestParam(required = false) Long weekId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(statisticsService.getServantsPerformance(ministryId, classId, weekId, principal));
     }
 
     @GetMapping("/absence-alerts")

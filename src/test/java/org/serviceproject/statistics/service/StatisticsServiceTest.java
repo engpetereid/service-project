@@ -27,6 +27,7 @@ import org.serviceproject.statistics.dto.AbsenceAlertResponse;
 import org.serviceproject.statistics.dto.ClassStatisticsResponse;
 import org.serviceproject.statistics.dto.DashboardStatisticsResponse;
 import org.serviceproject.statistics.dto.MinistryStatisticsResponse;
+import org.serviceproject.statistics.dto.ServantPerformanceResponse;
 import org.serviceproject.statistics.dto.ServantStatisticsResponse;
 import org.serviceproject.statistics.dto.StudentStatisticsResponse;
 import org.serviceproject.statistics.dto.WeeklyTrendDataPoint;
@@ -38,6 +39,8 @@ import org.serviceproject.users.entity.Person;
 import org.serviceproject.users.entity.Role;
 import org.serviceproject.users.entity.UserAccount;
 import org.serviceproject.users.repository.PersonRepository;
+import org.serviceproject.users.repository.UserAccountRepository;
+import org.serviceproject.selffollowup.repository.ServantWeeklyFollowUpRepository;
 import org.serviceproject.visits.entity.VisitMethod;
 import org.serviceproject.visits.entity.VisitRecord;
 import org.serviceproject.visits.repository.VisitRecordRepository;
@@ -90,6 +93,12 @@ class StatisticsServiceTest {
 
     @Mock
     private AcademicYearService academicYearService;
+
+    @Mock
+    private UserAccountRepository userAccountRepository;
+
+    @Mock
+    private ServantWeeklyFollowUpRepository servantWeeklyFollowUpRepository;
 
     @InjectMocks
     private StatisticsService statisticsService;
@@ -322,6 +331,10 @@ class StatisticsServiceTest {
                 .thenReturn(Collections.emptyList());
         when(attendanceRecordRepository.findAllPresentByWeekIdAndActivityType(10L, ActivityType.TASBEHA))
                 .thenReturn(Collections.emptyList());
+        when(userAccountRepository.findAllByPersonIdIn(any()))
+                .thenReturn(List.of(servantAccount));
+        when(servantWeeklyFollowUpRepository.findAllByWeekIdAndUserIdIn(eq(10L), any()))
+                .thenReturn(Collections.emptyList());
 
         ClassStatisticsResponse response = statisticsService.getClassStatistics(1000L, null, classSecretaryPrincipal);
 
@@ -363,6 +376,11 @@ class StatisticsServiceTest {
                 VisitMethod.CALL, 7, 8, 14, null, servantAccount);
 
         when(visitRecordRepository.findAllByWeekIdAndServantSnapId(10L, 3001L)).thenReturn(List.of(vr1, vr2));
+        when(userAccountRepository.findByPersonId(3001L)).thenReturn(Optional.of(servantAccount));
+        when(servantWeeklyFollowUpRepository.findByUserIdAndWeekId(201L, 10L)).thenReturn(Optional.empty());
+        when(servantWeeklyFollowUpRepository.findAllByUserIdAndAcademicYearIdOrderByWeekStartDateDesc(201L, 1L))
+                .thenReturn(Collections.emptyList());
+        when(weekRepository.findAllByDeletedAtIsNullOrderByStartDateDesc()).thenReturn(List.of(week10, week9));
 
         ServantStatisticsResponse response = statisticsService.getServantStatistics(3001L, null, servantPrincipal);
 
@@ -518,5 +536,31 @@ class StatisticsServiceTest {
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
         assertEquals("ACCESS_DENIED", ex.getCode());
+    }
+
+    @Test
+    void getServantsPerformance_success() {
+        when(weekService.getCurrentWeekEntity()).thenReturn(week10);
+        when(academicYearService.getCurrentEntity()).thenReturn(academicYear);
+
+        StaffPlacement staffPlacement = new StaffPlacement(servant1, academicYear, ministry, gradeClass);
+        when(staffPlacementRepository.findAllActiveByAcademicYearId(1L))
+                .thenReturn(List.of(staffPlacement));
+        when(userAccountRepository.findAllByPersonIdIn(List.of(3001L)))
+                .thenReturn(List.of(servantAccount));
+        when(servantWeeklyFollowUpRepository.findAllByWeekIdAndUserIdIn(eq(10L), any()))
+                .thenReturn(Collections.emptyList());
+        when(studentPlacementRepository.findAllByAcademicYearIdAndStatus(1L, StudentStatus.ACTIVE))
+                .thenReturn(List.of(placement1, placement2));
+        when(visitRecordRepository.findAllByWeekId(10L))
+                .thenReturn(Collections.emptyList());
+
+        ServantPerformanceResponse response = statisticsService.getServantsPerformance(null, null, null, adminPrincipal);
+
+        assertNotNull(response);
+        assertEquals(1, response.totalServants());
+        assertEquals(0, response.recordedFollowUpCount());
+        assertEquals(1, response.servants().size());
+        assertEquals(3001L, response.servants().get(0).servantId());
     }
 }

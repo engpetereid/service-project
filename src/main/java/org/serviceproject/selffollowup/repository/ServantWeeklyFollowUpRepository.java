@@ -61,4 +61,13 @@ public interface ServantWeeklyFollowUpRepository extends JpaRepository<ServantWe
     long countByUserIdAndAcademicYearId(
             @Param("userId") Long userId,
             @Param("academicYearId") Long academicYearId);
+
+    @Query("SELECT f FROM ServantWeeklyFollowUp f " +
+           "JOIN FETCH f.week w " +
+           "JOIN FETCH f.user u " +
+           "JOIN FETCH u.person p " +
+           "WHERE f.week.id = :weekId AND u.id IN :userIds")
+    List<ServantWeeklyFollowUp> findAllByWeekIdAndUserIdIn(
+            @Param("weekId") Long weekId,
+            @Param("userIds") java.util.Collection<Long> userIds);
 }

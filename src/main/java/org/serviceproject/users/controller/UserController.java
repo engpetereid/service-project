@@ -10,6 +10,9 @@ import org.serviceproject.users.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.serviceproject.common.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -67,6 +70,14 @@ public class UserController {
     public ResponseEntity<Void> restore(@PathVariable Long id) {
         userService.restoreDeleted(id);
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        userService.delete(id, principal);
+        return ResponseEntity.noContent().build();
     }
 
     @PostMapping("/from-person/{personId}")

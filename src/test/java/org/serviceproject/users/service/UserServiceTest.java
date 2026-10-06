@@ -7,6 +7,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.serviceproject.common.exception.AppException;
+import org.serviceproject.common.security.RoleWithScope;
+import org.serviceproject.common.security.UserPrincipal;
 import org.serviceproject.users.dto.AssignRolesRequest;
 import org.serviceproject.users.dto.CreateUserRequest;
 import org.serviceproject.users.dto.UpdateUserRequest;
@@ -67,7 +69,7 @@ class UserServiceTest {
 
     @Test
     void findAll_returnsList() {
-        when(userAccountRepository.findAll()).thenReturn(List.of(account));
+        when(userAccountRepository.findAllActiveUsers()).thenReturn(List.of(account));
 
         List<UserResponse> result = userService.findAll();
 
@@ -264,5 +266,48 @@ class UserServiceTest {
         AppException ex = assertThrows(AppException.class, () -> userService.restoreDeleted(1L));
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
         assertEquals("NOT_DELETED", ex.getCode());
+    }
+
+    @Test
+    void delete_cannotDeleteSelf_throwsBadRequest() {
+        when(userAccountRepository.findById(1L)).thenReturn(Optional.of(account));
+        UserPrincipal selfPrincipal = new UserPrincipal(1L, 10L, "01001234567", "pass", true, 0,
+                java.util.Set.of(new RoleWithScope(Role.GENERAL_ADMIN, null, null)));
+
+        AppException ex = assertThrows(AppException.class, () -> userService.delete(1L, selfPrincipal));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("CANNOT_DELETE_SELF", ex.getCode());
+    }
+
+    @Test
+    void delete_lastAdmin_throwsBadRequest() {
+        account.addRole(new UserRole(Role.GENERAL_ADMIN));
+        when(userAccountRepository.findById(1L)).thenReturn(Optional.of(account));
+        when(userAccountRepository.countActiveGeneralAdmins()).thenReturn(1L);
+
+        UserPrincipal otherPrincipal = new UserPrincipal(2L, 20L, "01009999999", "pass", true, 0,
+                java.util.Set.of(new RoleWithScope(Role.GENERAL_ADMIN, null, null)));
+
+        AppException ex = assertThrows(AppException.class, () -> userService.delete(1L, otherPrincipal));
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+        assertEquals("CANNOT_DELETE_LAST_ADMIN", ex.getCode());
+    }
+
+    @Test
+    void delete_success_softDeletesPersonAndDisablesAccount() {
+        account.addRole(new UserRole(Role.SERVANT));
+        when(userAccountRepository.findById(1L)).thenReturn(Optional.of(account));
+
+        UserPrincipal otherPrincipal = new UserPrincipal(2L, 20L, "01009999999", "pass", true, 0,
+                java.util.Set.of(new RoleWithScope(Role.GENERAL_ADMIN, null, null)));
+
+        userService.delete(1L, otherPrincipal);
+
+        assertTrue(person.isDeleted());
+        assertFalse(account.isEnabled());
+        assertEquals(1, account.getTokenVersion());
+        assertTrue(account.getRoles().isEmpty());
+        verify(personRepository).save(person);
+        verify(userAccountRepository).save(account);
     }
 }

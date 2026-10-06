@@ -47,6 +47,8 @@ export const MinistriesPage: React.FC = () => {
   const [editingMinistry, setEditingMinistry] = useState<MinistryResponse | null>(null);
   const [ministryName, setMinistryName] = useState('');
   const [ministryError, setMinistryError] = useState<string | null>(null);
+  const [ministryToDelete, setMinistryToDelete] = useState<MinistryResponse | null>(null);
+  const [ministryDeleteError, setMinistryDeleteError] = useState<string | null>(null);
 
   // Contextual Class modal states
   const [isClassDrawerOpen, setIsClassDrawerOpen] = useState(false);
@@ -160,6 +162,23 @@ export const MinistriesPage: React.FC = () => {
     },
     onError: (err: Error) => {
       setMinistryError(err.message || 'فشل حفظ الخدمة');
+    },
+  });
+
+  // Delete Ministry Mutation
+  const deleteMinistryMutation = useMutation({
+    mutationFn: async (ministryId: number) => {
+      await ministriesApi.delete(ministryId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ministries'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      setMinistryToDelete(null);
+      setMinistryDeleteError(null);
+      setIsMinistryDrawerOpen(false);
+    },
+    onError: (err: any) => {
+      setMinistryDeleteError(err?.response?.data?.message || err?.message || 'فشل حذف الخدمة');
     },
   });
 
@@ -588,14 +607,29 @@ export const MinistriesPage: React.FC = () => {
                       </Button>
 
                       {isAdmin && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenMinistryDrawer(m)}
-                        >
-                          <Edit3 className="w-3.5 h-3.5 ml-1" />
-                          تعديل
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenMinistryDrawer(m)}
+                          >
+                            <Edit3 className="w-3.5 h-3.5 ml-1" />
+                            تعديل
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setMinistryDeleteError(null);
+                              setMinistryToDelete(m);
+                            }}
+                            className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 font-bold"
+                            title="حذف الخدمة"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 ml-1" />
+                            حذف
+                          </Button>
+                        </div>
                       )}
 
                       <Button
@@ -931,13 +965,29 @@ export const MinistriesPage: React.FC = () => {
         title={editingMinistry ? 'تعديل اسم الخدمة' : 'إضافة خدمة كنسية جديدة'}
         footer={
           <div className="flex items-center justify-between w-full">
-            <Button
-              variant="outline"
-              onClick={() => setIsMinistryDrawerOpen(false)}
-              disabled={ministryMutation.isPending}
-            >
-              إلغاء
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsMinistryDrawerOpen(false)}
+                disabled={ministryMutation.isPending || deleteMinistryMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              {editingMinistry && isAdmin && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setMinistryDeleteError(null);
+                    setMinistryToDelete(editingMinistry);
+                  }}
+                  disabled={ministryMutation.isPending || deleteMinistryMutation.isPending}
+                  className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 font-bold"
+                >
+                  <Trash2 className="w-4 h-4 ml-1" />
+                  حذف الخدمة
+                </Button>
+              )}
+            </div>
             <Button
               variant="primary"
               onClick={() => ministryMutation.mutate()}
@@ -1115,6 +1165,75 @@ export const MinistriesPage: React.FC = () => {
                 className="bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white font-bold"
               >
                 نعم، احذف الفصل
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Ministry Confirmation Modal */}
+      {ministryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">تأكيد حذف الخدمة</h3>
+                <p className="text-xs text-gray-500">ID: {ministryToDelete.id}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-700 mb-4 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف خدمة{' '}
+              <span className="font-bold text-gray-900">"{ministryToDelete.name}"</span>؟
+            </p>
+
+            {(((ministryToDelete.studentsCount ?? 0) > 0) ||
+              ((ministryToDelete.servantsCount ?? 0) > 0) ||
+              ((ministryToDelete.classesCount ?? 0) > 0)) && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs text-amber-800 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>تنبيه ارتباطات الخدمة:</span>
+                </div>
+                <p>
+                  تحتوي هذه الخدمة حالياً على:
+                  {(ministryToDelete.classesCount ?? 0) > 0 && ` ${ministryToDelete.classesCount} فصول،`}
+                  {(ministryToDelete.servantsCount ?? 0) > 0 && ` ${ministryToDelete.servantsCount} خدام،`}
+                  {(ministryToDelete.studentsCount ?? 0) > 0 && ` ${ministryToDelete.studentsCount} مخدومين.`}
+                </p>
+                <p className="text-[11px] text-amber-700 leading-normal">
+                  يُرجى نقل أو إلغاء تسكين الفصول والخدام والمخدومين التابعين لهذه الخدمة قبل الحذف.
+                </p>
+              </div>
+            )}
+
+            {ministryDeleteError && (
+              <Alert variant="error" className="mb-4">
+                {ministryDeleteError}
+              </Alert>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setMinistryToDelete(null);
+                  setMinistryDeleteError(null);
+                }}
+                disabled={deleteMinistryMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => deleteMinistryMutation.mutate(ministryToDelete.id)}
+                isLoading={deleteMinistryMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white font-bold"
+              >
+                نعم، احذف الخدمة
               </Button>
             </div>
           </div>

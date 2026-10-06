@@ -38,6 +38,19 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
            "FROM UserRole ur WHERE ur.role = org.serviceproject.users.entity.Role.GENERAL_ADMIN")
     boolean existsAnyAdmin();
 
+    @Query("SELECT COUNT(DISTINCT u.id) FROM UserAccount u " +
+           "JOIN u.person p " +
+           "JOIN u.roles r " +
+           "WHERE r.role = org.serviceproject.users.entity.Role.GENERAL_ADMIN AND p.deletedAt IS NULL AND u.enabled = true")
+    long countActiveGeneralAdmins();
+
+    @Query("SELECT u FROM UserAccount u " +
+           "JOIN FETCH u.person p " +
+           "LEFT JOIN FETCH u.roles " +
+           "WHERE p.deletedAt IS NULL " +
+           "ORDER BY p.fullName ASC")
+    java.util.List<UserAccount> findAllActiveUsers();
+
     /** Find user account by person ID. */
     Optional<UserAccount> findByPersonId(Long personId);
 
@@ -73,5 +86,8 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
            "JOIN FETCH u.person p " +
            "WHERE r.role = org.serviceproject.users.entity.Role.CLASS_SECRETARY AND r.classId = :classId AND p.deletedAt IS NULL")
     java.util.List<UserAccount> findClassSecretariesByClassId(@Param("classId") Long classId);
+
+    @Query("SELECT u FROM UserAccount u JOIN FETCH u.person p WHERE p.id IN :personIds")
+    java.util.List<UserAccount> findAllByPersonIdIn(@Param("personIds") java.util.Collection<Long> personIds);
 }
 

@@ -202,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             />
             <div>
               <h2 className="text-base font-black text-gray-900 leading-tight">وزنة</h2>
-              <p className="text-[11px] text-gray-400 font-medium">نظام متابعة ورعاية الكنيسة</p>
+              <p className="text-[11px] text-gray-400 font-medium"> كنيسة البشيرين الاربعة و مخلص العالم</p>
             </div>
           </div>
           <button

@@ -6,6 +6,7 @@ import {
   WeeklyTrendDataPoint,
   MinistryStatisticsResponse,
   ClassStatisticsResponse,
+  ServantPerformanceResponse,
   ServantStatisticsResponse,
   StudentStatisticsResponse,
 } from '../types/statistics.types';
@@ -38,6 +39,15 @@ export const statisticsApi = {
   getClassStatistics: async (id: number, weekId?: number): Promise<ClassStatisticsResponse> => {
     const params = weekId ? { weekId } : undefined;
     const res = await apiClient.get<ClassStatisticsResponse>(`/statistics/class/${id}`, { params });
+    return res.data;
+  },
+
+  getServantsPerformance: async (params?: {
+    ministryId?: number;
+    classId?: number;
+    weekId?: number;
+  }): Promise<ServantPerformanceResponse> => {
+    const res = await apiClient.get<ServantPerformanceResponse>('/statistics/servants', { params });
     return res.data;
   },
 

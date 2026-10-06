@@ -31,6 +31,7 @@ interface ServantDrawerProps {
   onClose: () => void;
   servant: ServantResponse | null;
   onSaved: () => void;
+  initialEditMode?: boolean;
 }
 
 export const ServantDrawer: React.FC<ServantDrawerProps> = ({
@@ -38,6 +39,7 @@ export const ServantDrawer: React.FC<ServantDrawerProps> = ({
   onClose,
   servant,
   onSaved,
+  initialEditMode,
 }) => {
   const queryClient = useQueryClient();
   const { isAdmin, isServiceSecretary, isClassSecretary, managedMinistryId, managedClassId } =
@@ -95,7 +97,7 @@ export const ServantDrawer: React.FC<ServantDrawerProps> = ({
       setConfessionFather(servant.confessionFather || '');
       setMinistryId(servant.ministryId || '');
       setClassId(servant.classId || '');
-      setIsEditMode(false);
+      setIsEditMode(initialEditMode ?? false);
     } else {
       setFullName('');
       setPhone('');
@@ -115,7 +117,7 @@ export const ServantDrawer: React.FC<ServantDrawerProps> = ({
     setError(null);
     setSuccessMsg(null);
     setShowDeleteConfirm(false);
-  }, [servant, isOpen, managedMinistryId, managedClassId]);
+  }, [servant, isOpen, managedMinistryId, managedClassId, initialEditMode]);
 
   const canEdit = isAdmin || isServiceSecretary || isClassSecretary;
 

@@ -14,6 +14,7 @@ import {
   DashboardStatisticsResponse,
   MinistryStatisticsResponse,
   ClassStatisticsResponse,
+  ServantPerformanceResponse,
   ServantStatisticsResponse,
   WeeklyTrendDataPoint,
 } from '../types/statistics.types';
@@ -40,6 +41,10 @@ import {
   School,
   Sparkles,
   Search,
+  BookOpen,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from 'lucide-react';
 
 export const StatisticsPage: React.FC = () => {
@@ -55,6 +60,7 @@ export const StatisticsPage: React.FC = () => {
     isPureServant ? 'students' : isClassSecretary ? 'servants' : 'classes'
   );
   const [studentSearch, setStudentSearch] = useState<string>('');
+  const [servantSearch, setServantSearch] = useState<string>('');
   const [periodMode, setPeriodMode] = useState<'weekly' | 'monthly' | 'annual'>('weekly');
 
   // If user is Class Secretary without explicit managedMinistryId, lookup parent ministry
@@ -151,6 +157,23 @@ export const StatisticsPage: React.FC = () => {
         search: studentSearch || undefined,
       }),
     enabled: activeTab === 'students',
+  });
+
+  // Servants Performance Query (for servants tab across class, ministry, or all)
+  const { data: servantsPerformance, isLoading: isServantsLoading } = useQuery<ServantPerformanceResponse>({
+    queryKey: ['statistics', 'servants', selectedMinistryId, selectedClassId, effectiveWeekId],
+    queryFn: () =>
+      statisticsApi.getServantsPerformance({
+        ministryId: selectedMinistryId,
+        classId: selectedClassId,
+        weekId: effectiveWeekId,
+      }),
+    enabled: !isPureServant && activeTab === 'servants' && !!effectiveWeekId,
+  });
+
+  const filteredServants = (servantsPerformance?.servants || []).filter((s) => {
+    if (!servantSearch.trim()) return true;
+    return s.servantName.toLowerCase().includes(servantSearch.trim().toLowerCase());
   });
 
   // Active ministry object
@@ -835,6 +858,19 @@ export const StatisticsPage: React.FC = () => {
               />
             </div>
           )}
+
+          {activeTab === 'servants' && (
+            <div className="relative w-48 sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={servantSearch}
+                onChange={(e) => setServantSearch(e.target.value)}
+                placeholder="بحث باسم الخادم..."
+                className="w-full pl-3 pr-8 py-1.5 text-xs rounded-xl border border-gray-200 focus:outline-hidden focus:border-primary-500"
+              />
+            </div>
+          )}
         </div>
 
         {/* Tab 1: Classes Breakdown Table */}
@@ -896,50 +932,242 @@ export const StatisticsPage: React.FC = () => {
 
         {/* Tab 2: Servants Breakdown Table */}
         {activeTab === 'servants' && !isPureServant && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs">
-              <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-100">
-                <tr>
-                  <th className="py-2.5 px-3">اسم الخادم</th>
-                  <th className="py-2.5 px-3">المخدومين المسكنين</th>
-                  <th className="py-2.5 px-3">تم افتقادهم</th>
-                  <th className="py-2.5 px-3">نسبة الافتقاد</th>
-                  <th className="py-2.5 px-3 text-center">عرض الأداء</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {(classStats?.servantsStats || []).length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="text-center py-8 text-gray-400">
-                      {selectedClassId
-                        ? 'لا يوجد خدام مسكنين في هذا الفصل'
-                        : 'اختر فصلاً من الأعلى لعرض خدامه'}
-                    </td>
-                  </tr>
-                ) : (
-                  classStats!.servantsStats.map((ss) => (
-                    <tr key={ss.servantId} className="hover:bg-gray-50/50 transition">
-                      <td className="py-2.5 px-3 font-bold text-gray-900">{ss.servantName}</td>
-                      <td className="py-2.5 px-3 font-mono">{ss.assignedStudentsCount}</td>
-                      <td className="py-2.5 px-3 font-mono text-emerald-600 font-bold">
-                        {ss.visitedCount}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono font-bold">{ss.visitPercentage}%</td>
-                      <td className="py-2.5 px-3 text-center">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedServantId(ss.servantId)}
-                          className="text-xs h-8"
-                        >
-                          تفاصيل الأداء
-                        </Button>
-                      </td>
+          <div className="space-y-4">
+            {/* Aggregate Servants KPI Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* 1. إجمالي الخدام */}
+              <Card className="p-3 bg-gray-50/50 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-500">إجمالي الخدام</span>
+                  <div className="w-6 h-6 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg font-black text-gray-900 font-mono">
+                    {isServantsLoading ? '...' : servantsPerformance?.totalServants ?? 0}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {servantsPerformance?.recordedFollowUpCount ?? 0} سجلوا المتابعة ({servantsPerformance?.followUpSubmissionRate ?? 0}%)
+                  </p>
+                </div>
+              </Card>
+
+              {/* 2. متوسط النوتة الروحية */}
+              <Card className="p-3 bg-purple-50/30 border-purple-100 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-600">متوسط النوتة الروحية</span>
+                  <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                    <BookOpen className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg font-black text-purple-800 font-mono">
+                    {isServantsLoading
+                      ? '...'
+                      : servantsPerformance?.averageNotePercentage !== null && servantsPerformance?.averageNotePercentage !== undefined
+                      ? `${servantsPerformance.averageNotePercentage}%`
+                      : '-'}
+                  </div>
+                  <p className="text-[10px] text-purple-600 mt-0.5">درجات النوتة للخدام</p>
+                </div>
+              </Card>
+
+              {/* 3. حضور اجتماع الخدمة */}
+              <Card className="p-3 bg-sky-50/30 border-sky-100 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-600">حضور الاجتماع</span>
+                  <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center">
+                    <Users className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg font-black text-sky-800 font-mono">
+                    {isServantsLoading
+                      ? '...'
+                      : servantsPerformance?.meetingAttendanceRate !== null && servantsPerformance?.meetingAttendanceRate !== undefined
+                      ? `${servantsPerformance.meetingAttendanceRate}%`
+                      : '-'}
+                  </div>
+                  <p className="text-[10px] text-sky-600 mt-0.5">نسبة الحضور للاجتماع</p>
+                </div>
+              </Card>
+
+              {/* 4. حضور القداس الإلهي */}
+              <Card className="p-3 bg-indigo-50/30 border-indigo-100 flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-600">حضور القداس</span>
+                  <div className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <UserCheck className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg font-black text-indigo-800 font-mono">
+                    {isServantsLoading
+                      ? '...'
+                      : servantsPerformance?.massAttendanceRate !== null && servantsPerformance?.massAttendanceRate !== undefined
+                      ? `${servantsPerformance.massAttendanceRate}%`
+                      : '-'}
+                  </div>
+                  <p className="text-[10px] text-indigo-600 mt-0.5">نسبة الحضور للقداس</p>
+                </div>
+              </Card>
+
+              {/* 5. نسبة إنجاز الافتقاد */}
+              <Card className="p-3 bg-emerald-50/30 border-emerald-100 flex flex-col justify-between col-span-2 sm:col-span-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-600">نسبة الافتقاد</span>
+                  <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <CalendarCheck className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-lg font-black text-emerald-800 font-mono">
+                    {isServantsLoading ? '...' : `${servantsPerformance?.overallVisitPercentage ?? 0}%`}
+                  </div>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">إنجاز افتقاد المخدومين</p>
+                </div>
+              </Card>
+            </div>
+
+            {/* Servants Performance Table */}
+            <div className="overflow-x-auto">
+              {isServantsLoading ? (
+                <div className="py-12 flex justify-center">
+                  <Spinner size="md" />
+                </div>
+              ) : (
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-100">
+                    <tr>
+                      <th className="py-2.5 px-3">الخادم</th>
+                      <th className="py-2.5 px-3">النوتة الروحية</th>
+                      <th className="py-2.5 px-3">اجتماع الخدمة</th>
+                      <th className="py-2.5 px-3">القداس الإلهي</th>
+                      <th className="py-2.5 px-3">افتقاد المخدومين</th>
+                      <th className="py-2.5 px-3 text-center">عرض الأداء</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredServants.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-center py-8 text-gray-400">
+                          {servantSearch
+                            ? 'لا يوجد خادم يطابق البحث'
+                            : 'لا يوجد خدام مسجلين في هذا النطاق'}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredServants.map((ss) => (
+                        <tr key={ss.servantId} className="hover:bg-gray-50/50 transition">
+                          <td className="py-2.5 px-3">
+                            <div className="font-bold text-gray-900">{ss.servantName}</div>
+                            <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
+                              {(ss.ministryName || ss.className) && (
+                                <span>
+                                  {ss.ministryName ? ss.ministryName : ''}
+                                  {ss.ministryName && ss.className ? ' • ' : ''}
+                                  {ss.className ? ss.className : ''}
+                                </span>
+                              )}
+                              {ss.phone && (
+                                <span dir="ltr" className="font-mono">
+                                  {ss.phone}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            {ss.recordedSelfFollowUp && ss.noteScore !== null && ss.maxNoteScore !== null ? (
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-md font-bold text-xs ${
+                                    (ss.notePercentage ?? 0) >= 80
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : (ss.notePercentage ?? 0) >= 50
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : 'bg-red-100 text-red-800'
+                                  }`}
+                                >
+                                  {ss.noteScore}/{ss.maxNoteScore} ({ss.notePercentage}%)
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                                <Clock className="w-3 h-3" />
+                                لم تسجل
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {ss.attendedServiceMeeting === true ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                حاضر
+                              </span>
+                            ) : ss.attendedServiceMeeting === false ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                غائب
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-200">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                غير مسجل
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            {ss.attendedMass === true ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                حاضر
+                              </span>
+                            ) : ss.attendedMass === false ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                                غائب
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-200">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                غير مسجل
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-gray-800">
+                                {ss.visitedCount}/{ss.assignedStudentsCount}
+                              </span>
+                              <span className="font-mono text-emerald-700 font-bold">
+                                ({ss.visitPercentage}%)
+                              </span>
+                            </div>
+                            <div className="w-24 bg-gray-100 h-1.5 rounded-full overflow-hidden mt-1">
+                              <div
+                                className="bg-emerald-600 h-full rounded-full"
+                                style={{ width: `${Math.min(100, ss.visitPercentage)}%` }}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSelectedServantId(ss.servantId)}
+                              className="text-xs h-8"
+                            >
+                              تفاصيل الأداء
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         )}
 

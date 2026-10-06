@@ -24,6 +24,7 @@ import org.serviceproject.statistics.dto.ClassStatisticsResponse;
 import org.serviceproject.statistics.dto.ClassStatisticsSummary;
 import org.serviceproject.statistics.dto.DashboardStatisticsResponse;
 import org.serviceproject.statistics.dto.MinistryStatisticsResponse;
+import org.serviceproject.statistics.dto.ServantPerformanceResponse;
 import org.serviceproject.statistics.dto.ServantStatisticsResponse;
 import org.serviceproject.statistics.dto.ServantStatisticsSummary;
 import org.serviceproject.statistics.dto.StudentStatisticsResponse;
@@ -32,13 +33,17 @@ import org.serviceproject.students.entity.StudentPlacement;
 import org.serviceproject.students.entity.StudentStatus;
 import org.serviceproject.students.repository.StudentPlacementRepository;
 import org.serviceproject.users.entity.Person;
+import org.serviceproject.users.entity.UserAccount;
 import org.serviceproject.users.repository.PersonRepository;
 import org.serviceproject.users.repository.UserAccountRepository;
+import org.serviceproject.selffollowup.entity.ServantWeeklyFollowUp;
+import org.serviceproject.selffollowup.repository.ServantWeeklyFollowUpRepository;
 import org.serviceproject.visits.entity.VisitRecord;
 import org.serviceproject.visits.repository.VisitRecordRepository;
 import org.serviceproject.weeks.entity.Week;
 import org.serviceproject.weeks.repository.WeekRepository;
 import org.serviceproject.weeks.service.WeekService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,8 +52,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service calculating dynamic statistics, KPIs, and consecutive absence alerts.
@@ -68,6 +76,7 @@ public class StatisticsService {
     private final GradeClassRepository gradeClassRepository;
     private final PersonRepository personRepository;
     private final UserAccountRepository userAccountRepository;
+    private final ServantWeeklyFollowUpRepository servantWeeklyFollowUpRepository;
     private final WeekRepository weekRepository;
     private final WeekService weekService;
     private final AcademicYearService academicYearService;
@@ -149,9 +158,23 @@ public class StatisticsService {
         List<StaffPlacement> staffPlacements = staffPlacementRepository.findAllActiveByAcademicYearIdAndClassId(
                 currentYear.getId(), classId);
 
+        List<Long> personIds = staffPlacements.stream().map(sp -> sp.getPerson().getId()).toList();
+        Map<Long, UserAccount> userAccountByPersonId = userAccountRepository.findAllByPersonIdIn(personIds).stream()
+                .collect(Collectors.toMap(u -> u.getPerson().getId(), u -> u, (a, b) -> a));
+        List<Long> userIds = userAccountByPersonId.values().stream().map(UserAccount::getId).toList();
+
+        Map<Long, ServantWeeklyFollowUp> followUpByUserId = Collections.emptyMap();
+        if (servantWeeklyFollowUpRepository != null && !userIds.isEmpty()) {
+            followUpByUserId = servantWeeklyFollowUpRepository.findAllByWeekIdAndUserIdIn(week.getId(), userIds).stream()
+                    .collect(Collectors.toMap(f -> f.getUser().getId(), f -> f, (a, b) -> a));
+        }
+
         List<ServantStatisticsSummary> servantSummaries = new ArrayList<>();
         for (StaffPlacement sp : staffPlacements) {
             Person servant = sp.getPerson();
+            UserAccount ua = userAccountByPersonId.get(servant.getId());
+            ServantWeeklyFollowUp fu = (ua != null) ? followUpByUserId.get(ua.getId()) : null;
+
             List<StudentPlacement> servantStudents = classStudents.stream()
                     .filter(s -> s.getResponsibleServant() != null && s.getResponsibleServant().getId().equals(servant.getId()))
                     .toList();
@@ -163,12 +186,34 @@ public class StatisticsService {
             int visitedCount = servantVisits.size();
             double visitPercentage = safePercentage(visitedCount, assignedCount);
 
+            boolean recorded = (fu != null);
+            Integer noteScore = fu != null ? fu.getNoteScore() : null;
+            Integer maxNote = fu != null ? fu.getMaxNoteScoreSnapshot() : null;
+            Double notePct = (noteScore != null && maxNote != null && maxNote > 0)
+                    ? Math.round((noteScore * 100.0 / maxNote) * 10.0) / 10.0 : null;
+            Boolean attendedMeeting = fu != null ? fu.getAttendedServiceMeeting() : null;
+            Boolean attendedMass = fu != null ? fu.getAttendedMass() : null;
+            Boolean attendedTasbeha = fu != null ? fu.getAttendedTasbeha() : null;
+            Boolean attendedManagement = fu != null ? fu.getAttendedManagementMeeting() : null;
+
             servantSummaries.add(new ServantStatisticsSummary(
                     servant.getId(),
                     servant.getFullName(),
+                    gradeClass.getMinistry().getId(),
+                    gradeClass.getMinistry().getName(),
+                    gradeClass.getId(),
+                    gradeClass.getName(),
                     assignedCount,
                     visitedCount,
-                    visitPercentage
+                    visitPercentage,
+                    noteScore,
+                    maxNote,
+                    notePct,
+                    attendedMeeting,
+                    attendedMass,
+                    attendedTasbeha,
+                    attendedManagement,
+                    recorded
             ));
         }
 
@@ -222,15 +267,318 @@ public class StatisticsService {
                 .stream().map(v -> Math.round(v * 10.0) / 10.0).boxed()
                 .findFirst().orElse(null);
 
+        StaffPlacement sp = staffPlacementRepository.findByPersonIdAndAcademicYearId(servantId, currentYear.getId()).orElse(null);
+        Long ministryId = (sp != null && sp.getMinistry() != null) ? sp.getMinistry().getId() : null;
+        String ministryName = (sp != null && sp.getMinistry() != null) ? sp.getMinistry().getName() : null;
+        Long classId = (sp != null && sp.getGradeClass() != null) ? sp.getGradeClass().getId() : null;
+        String className = (sp != null && sp.getGradeClass() != null) ? sp.getGradeClass().getName() : null;
+
+        UserAccount ua = userAccountRepository.findByPersonId(servantId).orElse(null);
+        ServantWeeklyFollowUp fu = (ua != null && servantWeeklyFollowUpRepository != null)
+                ? servantWeeklyFollowUpRepository.findByUserIdAndWeekId(ua.getId(), week.getId()).orElse(null)
+                : null;
+
+        Integer servantNote = fu != null ? fu.getNoteScore() : null;
+        Integer servantMaxNote = fu != null ? fu.getMaxNoteScoreSnapshot() : null;
+        Double servantNotePct = (servantNote != null && servantMaxNote != null && servantMaxNote > 0)
+                ? Math.round((servantNote * 100.0 / servantMaxNote) * 10.0) / 10.0 : null;
+        Boolean servantMass = fu != null ? fu.getAttendedMass() : null;
+        Boolean servantMeeting = fu != null ? fu.getAttendedServiceMeeting() : null;
+        Boolean servantTasbeha = fu != null ? fu.getAttendedTasbeha() : null;
+        Boolean servantManagement = fu != null ? fu.getAttendedManagementMeeting() : null;
+        boolean recordedFollowUp = (fu != null);
+
+        Double annualRecordingRate = null;
+        Double annualAvgNotePct = null;
+        Double annualMassRate = null;
+        Double annualMeetingRate = null;
+        Double annualVisitPct = null;
+        List<ServantStatisticsResponse.ServantRecentWeekRecord> recentWeeks = new ArrayList<>();
+
+        if (ua != null && servantWeeklyFollowUpRepository != null) {
+            List<ServantWeeklyFollowUp> yearFollowUps = servantWeeklyFollowUpRepository
+                    .findAllByUserIdAndAcademicYearIdOrderByWeekStartDateDesc(ua.getId(), currentYear.getId());
+
+            List<Week> allYearWeeks = weekRepository.findAllByDeletedAtIsNullOrderByStartDateDesc().stream()
+                    .filter(w -> !w.getStartDate().isBefore(currentYear.getStartDate()) && !w.getEndDate().isAfter(currentYear.getEndDate()))
+                    .toList();
+
+            long totalPassedWeeks = allYearWeeks.stream()
+                    .filter(w -> !w.getStartDate().isAfter(week.getStartDate()))
+                    .count();
+            if (totalPassedWeeks <= 0) totalPassedWeeks = Math.max(1, yearFollowUps.size());
+
+            annualRecordingRate = safePercentage(yearFollowUps.size(), (int) totalPassedWeeks);
+
+            annualAvgNotePct = yearFollowUps.stream()
+                    .filter(f -> f.getNoteScore() != null && f.getMaxNoteScoreSnapshot() != null && f.getMaxNoteScoreSnapshot() > 0)
+                    .mapToDouble(f -> f.getNoteScore() * 100.0 / f.getMaxNoteScoreSnapshot())
+                    .average()
+                    .stream().map(v -> Math.round(v * 10.0) / 10.0).boxed()
+                    .findFirst().orElse(null);
+
+            annualMassRate = yearFollowUps.stream()
+                    .filter(f -> f.getAttendedMass() != null)
+                    .mapToDouble(f -> Boolean.TRUE.equals(f.getAttendedMass()) ? 100.0 : 0.0)
+                    .average()
+                    .stream().map(v -> Math.round(v * 10.0) / 10.0).boxed()
+                    .findFirst().orElse(null);
+
+            annualMeetingRate = yearFollowUps.stream()
+                    .filter(f -> f.getAttendedServiceMeeting() != null)
+                    .mapToDouble(f -> Boolean.TRUE.equals(f.getAttendedServiceMeeting()) ? 100.0 : 0.0)
+                    .average()
+                    .stream().map(v -> Math.round(v * 10.0) / 10.0).boxed()
+                    .findFirst().orElse(null);
+
+            List<Week> targetWeeks = allYearWeeks.stream()
+                    .filter(w -> !w.getStartDate().isAfter(week.getStartDate()))
+                    .limit(8)
+                    .toList();
+
+            Map<Long, ServantWeeklyFollowUp> followUpByWeekId = yearFollowUps.stream()
+                    .collect(Collectors.toMap(f -> f.getWeek().getId(), f -> f, (a, b) -> a));
+
+            int totalYearVisits = 0;
+            for (Week pw : targetWeeks) {
+                ServantWeeklyFollowUp pfu = followUpByWeekId.get(pw.getId());
+                List<VisitRecord> pVisits = visitRecordRepository.findAllByWeekIdAndServantSnapId(pw.getId(), servantId);
+                int pVisited = pVisits.size();
+                double pVisitPct = safePercentage(pVisited, assignedCount);
+
+                Integer pNote = pfu != null ? pfu.getNoteScore() : null;
+                Integer pMaxNote = pfu != null ? pfu.getMaxNoteScoreSnapshot() : null;
+                Double pNotePct = (pNote != null && pMaxNote != null && pMaxNote > 0)
+                        ? Math.round((pNote * 100.0 / pMaxNote) * 10.0) / 10.0 : null;
+
+                recentWeeks.add(new ServantStatisticsResponse.ServantRecentWeekRecord(
+                        pw.getId(),
+                        pw.getStartDate(),
+                        pw.getEndDate(),
+                        pNote,
+                        pMaxNote,
+                        pNotePct,
+                        pfu != null ? pfu.getAttendedMass() : null,
+                        pfu != null ? pfu.getAttendedServiceMeeting() : null,
+                        pVisited,
+                        assignedCount,
+                        pVisitPct,
+                        pfu != null
+                ));
+            }
+
+            if (assignedCount > 0 && totalPassedWeeks > 0) {
+                for (Week yw : allYearWeeks) {
+                    if (!yw.getStartDate().isAfter(week.getStartDate())) {
+                        totalYearVisits += visitRecordRepository.findAllByWeekIdAndServantSnapId(yw.getId(), servantId).size();
+                    }
+                }
+                annualVisitPct = safePercentage(totalYearVisits, (int) (assignedCount * totalPassedWeeks));
+            }
+        }
+
         return new ServantStatisticsResponse(
                 servant.getId(),
                 servant.getFullName(),
+                ministryId,
+                ministryName,
+                classId,
+                className,
+                servant.getPhone(),
                 assignedCount,
                 visitedCount,
                 visitPercentage,
+                servantNote,
+                servantMaxNote,
+                servantNotePct,
+                servantMass,
+                servantMeeting,
+                servantTasbeha,
+                servantManagement,
+                recordedFollowUp,
                 avgPrayer,
                 avgReading,
-                avgNote
+                avgNote,
+                annualRecordingRate,
+                annualAvgNotePct,
+                annualMassRate,
+                annualMeetingRate,
+                annualVisitPct,
+                recentWeeks
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public ServantPerformanceResponse getServantsPerformance(Long ministryId, Long classId, Long weekId, UserPrincipal principal) {
+        if (principal == null) {
+            throw AppException.unauthorized("UNAUTHORIZED", "غير مصرح");
+        }
+        if (!principal.isAdmin() && !principal.isServiceSecretary() && !principal.isClassSecretary()) {
+            throw AppException.forbidden("ACCESS_DENIED", "هذه الصفحة مخصصة للمسؤولين وأمناء الخدمة والفصول فقط");
+        }
+
+        if (principal.isServiceSecretary() && !principal.isAdmin()) {
+            Long managedMinistryId = principal.getServiceSecretaryMinistryId();
+            if (ministryId != null && !ministryId.equals(managedMinistryId)) {
+                throw AppException.forbidden("ACCESS_DENIED", "لا تملك صلاحية للاطلاع على إحصائيات هذه الخدمة");
+            }
+            ministryId = managedMinistryId;
+        } else if (principal.isClassSecretary() && !principal.isAdmin()) {
+            Long managedClassId = principal.getClassSecretaryClassId();
+            if (classId != null && !classId.equals(managedClassId)) {
+                throw AppException.forbidden("ACCESS_DENIED", "لا تملك صلاحية للاطلاع على إحصائيات هذا الفصل");
+            }
+            classId = managedClassId;
+        }
+
+        if (classId != null) {
+            GradeClass gc = gradeClassRepository.findByIdWithMinistry(classId)
+                    .orElseThrow(() -> AppException.notFound("CLASS_NOT_FOUND", "الفصل غير موجود"));
+            checkClassScope(gc, principal);
+        } else if (ministryId != null) {
+            Ministry m = ministryRepository.findById(ministryId)
+                    .orElseThrow(() -> AppException.notFound("MINISTRY_NOT_FOUND", "الخدمة غير موجودة"));
+            checkMinistryScope(ministryId, principal);
+        }
+
+        Week week = resolveWeek(weekId);
+        AcademicYear currentYear = academicYearService.getCurrentEntity();
+
+        List<StaffPlacement> staffPlacements;
+        if (classId != null) {
+            staffPlacements = staffPlacementRepository.findAllActiveByAcademicYearIdAndClassId(currentYear.getId(), classId);
+        } else if (ministryId != null) {
+            staffPlacements = staffPlacementRepository.findAllActiveByAcademicYearIdAndMinistryId(currentYear.getId(), ministryId);
+        } else {
+            staffPlacements = staffPlacementRepository.findAllActiveByAcademicYearId(currentYear.getId());
+        }
+
+        if (staffPlacements.isEmpty()) {
+            return new ServantPerformanceResponse(0, 0, 0.0, null, null, null, 0.0, Collections.emptyList());
+        }
+
+        List<Long> personIds = staffPlacements.stream()
+                .map(sp -> sp.getPerson().getId())
+                .distinct()
+                .toList();
+
+        Map<Long, UserAccount> userAccountByPersonId = userAccountRepository.findAllByPersonIdIn(personIds).stream()
+                .collect(Collectors.toMap(u -> u.getPerson().getId(), u -> u, (a, b) -> a));
+
+        List<Long> userIds = userAccountByPersonId.values().stream()
+                .map(UserAccount::getId)
+                .toList();
+
+        Map<Long, ServantWeeklyFollowUp> followUpByUserId = Collections.emptyMap();
+        if (servantWeeklyFollowUpRepository != null && !userIds.isEmpty()) {
+            followUpByUserId = servantWeeklyFollowUpRepository.findAllByWeekIdAndUserIdIn(week.getId(), userIds).stream()
+                    .collect(Collectors.toMap(f -> f.getUser().getId(), f -> f, (a, b) -> a));
+        }
+
+        List<StudentPlacement> students;
+        if (classId != null) {
+            students = studentPlacementRepository.findAllByAcademicYearIdAndClassIdAndStatus(currentYear.getId(), classId, StudentStatus.ACTIVE);
+        } else if (ministryId != null) {
+            students = studentPlacementRepository.findAllByAcademicYearIdAndMinistryIdAndStatus(currentYear.getId(), ministryId, StudentStatus.ACTIVE);
+        } else {
+            students = studentPlacementRepository.findAllByAcademicYearIdAndStatus(currentYear.getId(), StudentStatus.ACTIVE);
+        }
+
+        Map<Long, List<StudentPlacement>> assignedStudentsByServantId = students.stream()
+                .filter(s -> s.getResponsibleServant() != null)
+                .collect(Collectors.groupingBy(s -> s.getResponsibleServant().getId()));
+
+        List<VisitRecord> allVisits = visitRecordRepository.findAllByWeekId(week.getId());
+        Map<Long, List<VisitRecord>> visitsByServantId = allVisits.stream()
+                .filter(v -> v.getServantSnap() != null)
+                .collect(Collectors.groupingBy(v -> v.getServantSnap().getId()));
+
+        List<ServantStatisticsSummary> summaries = new ArrayList<>();
+        int totalAssignedAll = 0;
+        int totalVisitedAll = 0;
+
+        for (StaffPlacement sp : staffPlacements) {
+            Person servant = sp.getPerson();
+            UserAccount ua = userAccountByPersonId.get(servant.getId());
+            ServantWeeklyFollowUp fu = (ua != null) ? followUpByUserId.get(ua.getId()) : null;
+
+            List<StudentPlacement> myStudents = assignedStudentsByServantId.getOrDefault(servant.getId(), Collections.emptyList());
+            int assignedCount = myStudents.size();
+            List<VisitRecord> myVisits = visitsByServantId.getOrDefault(servant.getId(), Collections.emptyList());
+            int visitedCount = myVisits.size();
+            double visitPct = safePercentage(visitedCount, assignedCount);
+
+            totalAssignedAll += assignedCount;
+            totalVisitedAll += visitedCount;
+
+            boolean recorded = (fu != null);
+            Integer noteScore = fu != null ? fu.getNoteScore() : null;
+            Integer maxNote = fu != null ? fu.getMaxNoteScoreSnapshot() : null;
+            Double notePct = (noteScore != null && maxNote != null && maxNote > 0)
+                    ? Math.round((noteScore * 100.0 / maxNote) * 10.0) / 10.0 : null;
+            Boolean attendedMeeting = fu != null ? fu.getAttendedServiceMeeting() : null;
+            Boolean attendedMass = fu != null ? fu.getAttendedMass() : null;
+            Boolean attendedTasbeha = fu != null ? fu.getAttendedTasbeha() : null;
+            Boolean attendedManagement = fu != null ? fu.getAttendedManagementMeeting() : null;
+
+            summaries.add(new ServantStatisticsSummary(
+                    servant.getId(),
+                    servant.getFullName(),
+                    sp.getMinistry() != null ? sp.getMinistry().getId() : null,
+                    sp.getMinistry() != null ? sp.getMinistry().getName() : null,
+                    sp.getGradeClass() != null ? sp.getGradeClass().getId() : null,
+                    sp.getGradeClass() != null ? sp.getGradeClass().getName() : null,
+                    assignedCount,
+                    visitedCount,
+                    visitPct,
+                    noteScore,
+                    maxNote,
+                    notePct,
+                    attendedMeeting,
+                    attendedMass,
+                    attendedTasbeha,
+                    attendedManagement,
+                    recorded
+            ));
+        }
+
+        int totalServants = summaries.size();
+        int recordedCount = (int) summaries.stream().filter(ServantStatisticsSummary::recordedSelfFollowUp).count();
+        double submissionRate = safePercentage(recordedCount, totalServants);
+
+        Double avgNotePercentage = summaries.stream()
+                .map(ServantStatisticsSummary::notePercentage)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .stream().map(v -> Math.round(v * 10.0) / 10.0).boxed()
+                .findFirst().orElse(null);
+
+        Double massAttendanceRate = null;
+        Double meetingAttendanceRate = null;
+        if (recordedCount > 0) {
+            long massAttended = summaries.stream()
+                    .filter(s -> Boolean.TRUE.equals(s.attendedMass()))
+                    .count();
+            massAttendanceRate = Math.round((massAttended * 100.0 / recordedCount) * 10.0) / 10.0;
+
+            long meetingAttended = summaries.stream()
+                    .filter(s -> Boolean.TRUE.equals(s.attendedServiceMeeting()))
+                    .count();
+            meetingAttendanceRate = Math.round((meetingAttended * 100.0 / recordedCount) * 10.0) / 10.0;
+        }
+
+        double overallVisitPercentage = safePercentage(totalVisitedAll, totalAssignedAll);
+
+        return new ServantPerformanceResponse(
+                totalServants,
+                recordedCount,
+                submissionRate,
+                avgNotePercentage,
+                massAttendanceRate,
+                meetingAttendanceRate,
+                overallVisitPercentage,
+                summaries
         );
     }
 
