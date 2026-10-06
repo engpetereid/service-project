@@ -29,6 +29,7 @@ import {
   Table as TableIcon,
   LayoutGrid,
   Layers,
+  Trash2,
 } from 'lucide-react';
 
 export const MinistriesPage: React.FC = () => {
@@ -54,6 +55,10 @@ export const MinistriesPage: React.FC = () => {
   const [className, setClassName] = useState('');
   const [classSortOrder, setClassSortOrder] = useState<number>(0);
   const [classError, setClassError] = useState<string | null>(null);
+
+  // Class Delete Confirmation states
+  const [classToDelete, setClassToDelete] = useState<GradeClassResponse | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Secretary Assignment Modal states
   const [secretaryModalState, setSecretaryModalState] = useState<{
@@ -185,6 +190,34 @@ export const MinistriesPage: React.FC = () => {
     },
   });
 
+  // Delete Class Mutation
+  const deleteClassMutation = useMutation({
+    mutationFn: async (classId: number) => {
+      await classesApi.delete(classId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['ministries'] });
+      setClassToDelete(null);
+      setDeleteError(null);
+      setIsClassDrawerOpen(false);
+    },
+    onError: (err: any) => {
+      setDeleteError(err?.response?.data?.message || err?.message || 'فشل حذف الفصل');
+    },
+  });
+
+  const canManageClass = (classItem: GradeClassResponse) => {
+    if (isAdmin) return true;
+    if (isServiceSecretary && managedMinistryId === classItem.ministryId) return true;
+    return false;
+  };
+
+  const handleConfirmDeleteClass = (classItem: GradeClassResponse) => {
+    setDeleteError(null);
+    setClassToDelete(classItem);
+  };
+
   const handleOpenMinistryDrawer = (ministry: MinistryResponse | null) => {
     setEditingMinistry(ministry);
     setMinistryName(ministry ? ministry.name : '');
@@ -193,10 +226,13 @@ export const MinistriesPage: React.FC = () => {
   };
 
   const handleOpenClassDrawer = (
-    ministry: MinistryResponse,
+    ministry: MinistryResponse | null,
     gradeClass: GradeClassResponse | null
   ) => {
-    setTargetMinistryForClass(ministry);
+    const parentMin =
+      ministry ||
+      (gradeClass ? allMinistries.find((m) => m.id === gradeClass.ministryId) || null : null);
+    setTargetMinistryForClass(parentMin);
     setEditingClass(gradeClass);
     setClassName(gradeClass ? gradeClass.name : '');
     setClassSortOrder(gradeClass ? gradeClass.sortOrder : 0);
@@ -619,7 +655,7 @@ export const MinistriesPage: React.FC = () => {
                               key={c.id}
                               className="bg-white p-4 rounded-2xl border border-gray-100 shadow-2xs hover:shadow-sm transition space-y-3"
                             >
-                              {/* Class Title & Edit */}
+                              {/* Class Title & Actions */}
                               <div className="flex items-start justify-between">
                                 <div>
                                   <h5 className="font-bold text-gray-900 text-sm">{c.name}</h5>
@@ -627,14 +663,28 @@ export const MinistriesPage: React.FC = () => {
                                     الترتيب: {c.sortOrder}
                                   </span>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleOpenClassDrawer(m, c)}
-                                  className="text-gray-400 hover:text-gray-700 p-1 h-auto"
-                                >
-                                  <Edit3 className="w-3.5 h-3.5" />
-                                </Button>
+                                {canManageClass(c) && (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleOpenClassDrawer(m, c)}
+                                      className="text-gray-400 hover:text-gray-700 p-1.5 h-auto rounded-lg"
+                                      title="تعديل بيانات الفصل"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleConfirmDeleteClass(c)}
+                                      className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 h-auto rounded-lg transition"
+                                      title="حذف الفصل"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Class Secretary Info */}
@@ -814,7 +864,35 @@ export const MinistriesPage: React.FC = () => {
                         {c.studentsCount || 0}
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {canManageClass(c) && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  const parentMin =
+                                    allMinistries.find((m) => m.id === c.ministryId) || null;
+                                  handleOpenClassDrawer(parentMin, c);
+                                }}
+                                className="text-[11px] font-bold text-gray-600 hover:text-gray-900 py-1 px-2 h-auto"
+                                title="تعديل بيانات الفصل"
+                              >
+                                <Edit3 className="w-3 h-3 ml-1" />
+                                تعديل
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleConfirmDeleteClass(c)}
+                                className="text-[11px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 py-1 px-2 h-auto"
+                                title="حذف الفصل"
+                              >
+                                <Trash2 className="w-3 h-3 ml-1" />
+                                حذف
+                              </Button>
+                            </>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -897,13 +975,26 @@ export const MinistriesPage: React.FC = () => {
         }
         footer={
           <div className="flex items-center justify-between w-full">
-            <Button
-              variant="outline"
-              onClick={() => setIsClassDrawerOpen(false)}
-              disabled={classMutation.isPending}
-            >
-              إلغاء
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setIsClassDrawerOpen(false)}
+                disabled={classMutation.isPending || deleteClassMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              {editingClass && canManageClass(editingClass) && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleConfirmDeleteClass(editingClass)}
+                  disabled={classMutation.isPending || deleteClassMutation.isPending}
+                  className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 font-bold"
+                >
+                  <Trash2 className="w-4 h-4 ml-1" />
+                  حذف الفصل
+                </Button>
+              )}
+            </div>
             <Button
               variant="primary"
               onClick={() => classMutation.mutate()}
@@ -963,6 +1054,72 @@ export const MinistriesPage: React.FC = () => {
         ministryIdForClass={secretaryModalState.ministryIdForClass}
         onSuccess={handleSecretarySuccess}
       />
+
+      {/* Delete Class Confirmation Modal */}
+      {classToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">تأكيد حذف الفصل</h3>
+                <p className="text-xs text-gray-500">خدمة {classToDelete.ministryName}</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-700 mb-4 leading-relaxed">
+              هل أنت متأكد من رغبتك في حذف فصل{' '}
+              <span className="font-bold text-gray-900">"{classToDelete.name}"</span>؟
+            </p>
+
+            {(((classToDelete.studentsCount ?? 0) > 0) || ((classToDelete.servantsCount ?? 0) > 0)) && (
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl mb-4 text-xs text-amber-800 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>تنبيه ارتباطات الفصل:</span>
+                </div>
+                <p>
+                  يحتوي هذا الفصل حالياً على{' '}
+                  <strong className="text-amber-950 font-bold">{classToDelete.studentsCount ?? 0} مخدوم</strong> و{' '}
+                  <strong className="text-amber-950 font-bold">{classToDelete.servantsCount ?? 0} خادم</strong>.
+                </p>
+                <p className="text-[11px] text-amber-700 leading-normal">
+                  عند الحذف، سيتم إخفاء الفصل من القوائم النشطة. يُنصح بنقل المخدومين والخدام التابعين له إلى فصول أخرى أولاً.
+                </p>
+              </div>
+            )}
+
+            {deleteError && (
+              <Alert variant="error" className="mb-4">
+                {deleteError}
+              </Alert>
+            )}
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-gray-100">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setClassToDelete(null);
+                  setDeleteError(null);
+                }}
+                disabled={deleteClassMutation.isPending}
+              >
+                إلغاء
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => deleteClassMutation.mutate(classToDelete.id)}
+                isLoading={deleteClassMutation.isPending}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white font-bold"
+              >
+                نعم، احذف الفصل
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

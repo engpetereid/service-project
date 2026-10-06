@@ -173,6 +173,17 @@ public class GradeClassService {
 
         gc.setActive(false);
         gradeClassRepository.save(gc);
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(AuditEvent.of(
+                    principal,
+                    AuditAction.DELETE,
+                    "GradeClass",
+                    id,
+                    "Deactivated class: " + gc.getName(),
+                    null
+            ));
+        }
     }
 
     @Transactional
