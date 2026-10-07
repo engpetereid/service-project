@@ -4,10 +4,10 @@ import { ApiError } from '../types/common.types';
 export const TOKEN_KEY = 'service_project_token';
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+    baseURL: import.meta.env.VITE_API_URL ?? '/api',
+    headers: {
+        'Content-Type': 'application/json',
+    },
 });
 
 apiClient.interceptors.request.use(
